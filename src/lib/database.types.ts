@@ -159,6 +159,10 @@ export type Database = {
         Args: { p_code: string };
         Returns: Leagues;
       };
+      create_league: {
+        Args: { p_name: string; p_description?: string | null };
+        Returns: Leagues;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

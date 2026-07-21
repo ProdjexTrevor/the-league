@@ -28,17 +28,42 @@ export async function createLeague(formData: FormData) {
 
   if (!user) fail("Not signed in.");
 
-  const { data, error } = await supabase
-    .from("leagues")
-    .insert({
-      name,
-      description: description || null,
-      created_by: user.id,
-    })
-    .select("id")
-    .single();
+  // Ensure profile row exists (FK + display name)
+  await supabase.from("profiles").upsert(
+    {
+      id: user.id,
+      display_name:
+        (user.user_metadata?.display_name as string | undefined) ||
+        user.email?.split("@")[0] ||
+        "Player",
+    },
+    { onConflict: "id" }
+  );
 
-  if (error || !data) fail(error?.message ?? "Could not create league.");
+  const { data, error } = await supabase.rpc("create_league", {
+    p_name: name,
+    p_description: description || null,
+  });
+
+  if (error || !data) {
+    // Fallback if RPC not applied yet
+    const fallback = await supabase
+      .from("leagues")
+      .insert({
+        name,
+        description: description || null,
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
+
+    if (fallback.error || !fallback.data) {
+      fail(error?.message ?? fallback.error?.message ?? "Could not create league.");
+    }
+
+    revalidatePath("/app");
+    redirect(`/leagues/${fallback.data.id}`);
+  }
 
   revalidatePath("/app");
   redirect(`/leagues/${data.id}`);
