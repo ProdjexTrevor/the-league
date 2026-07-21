@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0c1210;
+  --bg-elevated: #141c18;
+  --fg: #f2f5f0;
+  --muted: #8a968c;
+  --accent: #d6ff4b;
+  --accent-ink: #0c1210;
+  --line: rgba(242, 245, 240, 0.12);
+  --danger: #ff6b5a;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-line: var(--line);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(214, 255, 75, 0.08), transparent 55%),
+    radial-gradient(900px 500px at 90% 0%, rgba(90, 140, 110, 0.18), transparent 50%),
+    var(--bg);
+  color: var(--fg);
+}
+
+.font-display {
+  font-family: var(--font-display), sans-serif;
+  letter-spacing: 0.04em;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes grain-shift {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(-2%, -2%);
+  }
+}
+
+.animate-rise {
+  animation: rise 0.7s ease-out both;
+}
+
+.animate-rise-delay {
+  animation: rise 0.8s ease-out 0.12s both;
+}
+
+.animate-rise-delay-2 {
+  animation: rise 0.9s ease-out 0.22s both;
+}
+
+.hero-grain::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  opacity: 0.07;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain-shift 8s linear infinite alternate;
+}
