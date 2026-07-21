@@ -4,6 +4,8 @@ import { notFound, redirect } from "next/navigation";
 import { createGame } from "@/app/actions";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 type Props = { params: Promise<{ id: string }> };
 
 export default async function LeaguePage({ params }: Props) {

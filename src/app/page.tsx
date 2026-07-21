@@ -1,12 +1,20 @@
 import Link from "next/link";
 
+import { getSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function HomePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user: { id: string } | null = null;
+
+  if (getSupabaseEnv()) {
+    try {
+      const supabase = await createClient();
+      const { data } = await supabase.auth.getUser();
+      user = data.user;
+    } catch {
+      user = null;
+    }
+  }
 
   return (
     <main className="relative flex min-h-screen flex-col overflow-hidden">

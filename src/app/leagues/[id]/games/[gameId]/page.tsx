@@ -4,6 +4,8 @@ import { notFound, redirect } from "next/navigation";
 import { addPlayerToGame, completeGame } from "@/app/actions";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 type Props = {
   params: Promise<{ id: string; gameId: string }>;
 };

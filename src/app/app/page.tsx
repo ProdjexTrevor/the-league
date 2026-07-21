@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { createLeague, joinLeague, signOut } from "@/app/actions";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 export default async function AppPage() {
   const supabase = await createClient();
   const {

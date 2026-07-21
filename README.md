@@ -46,10 +46,15 @@ Open [http://localhost:3000](http://localhost:3000).
 ## 3. Deploy on Vercel
 
 1. Push this repo to GitHub
-2. [vercel.com/new](https://vercel.com/new) → import the repo (root: `the-league` if monorepo)
-3. Add the same env vars as `.env.local`
-4. Deploy
+2. [vercel.com/new](https://vercel.com/new) → import the repo
+3. **Before or right after first deploy**, add Environment Variables (Production + Preview):
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `NEXT_PUBLIC_APP_URL` = your Vercel URL (e.g. `https://the-league.vercel.app`)
+4. Redeploy after saving env vars (Deployments → … → Redeploy)
 5. In Supabase Auth URL settings, add your `*.vercel.app` (and custom domain) Site URL + `/auth/callback`
+
+Without the Supabase env vars, the homepage may load after this fix, but login/signup will not work.
 
 ## What you can do
 
