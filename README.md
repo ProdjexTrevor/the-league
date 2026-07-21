@@ -2,7 +2,7 @@
 
 Friendly group wagers and standings — **Next.js** on **Vercel**, **Supabase** for auth + Postgres.
 
-> Use a **dedicated** Supabase project for The League. Do not reuse an existing app database (e.g. Grind Pass).
+> Use a **dedicated** Supabase project for The League. Do not reuse an existing app database.
 
 ## Stack
 
@@ -11,64 +11,36 @@ Friendly group wagers and standings — **Next.js** on **Vercel**, **Supabase** 
 - Supabase Postgres + RLS
 - Deploy target: Vercel
 
-## 1. Create a Supabase project
+## Database setup (run in order)
 
-1. Go to [supabase.com](https://supabase.com) → **New project**
-2. Open **SQL Editor** → paste and run  
-   [`supabase/migrations/20260721_init.sql`](./supabase/migrations/20260721_init.sql)
-3. **Authentication → URL configuration**
-   - Site URL: `http://localhost:3000` (add your Vercel URL later)
-   - Redirect URLs: `http://localhost:3000/auth/callback` and `https://YOUR_DOMAIN/auth/callback`
-4. **Project Settings → API** — copy Project URL and `anon` key
+In the Supabase SQL Editor for project `wbwdmxlroniuacibeirg` (or your League project):
 
-## 2. Local env
+1. [`supabase/migrations/20260721_init.sql`](./supabase/migrations/20260721_init.sql) — if not already applied  
+2. [`supabase/migrations/20260721_fix_create_league.sql`](./supabase/migrations/20260721_fix_create_league.sql) — if create-league was broken  
+3. **[`supabase/migrations/20260721_competitions_catalog_odds.sql`](./supabase/migrations/20260721_competitions_catalog_odds.sql)** — catalog, events, odds, entry fees  
+
+Then Auth → URL config: Site URL + `/auth/callback` for localhost and Vercel.
+
+## Local env
 
 ```bash
 cd the-league
 cp .env.example .env.local
-```
-
-Fill in:
-
-```
-NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
-
-```bash
+# fill NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
-
-## 3. Deploy on Vercel
-
-1. Push this repo to GitHub
-2. [vercel.com/new](https://vercel.com/new) → import the repo
-3. **Before or right after first deploy**, add Environment Variables (Production + Preview):
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `NEXT_PUBLIC_APP_URL` = your Vercel URL (e.g. `https://the-league.vercel.app`)
-4. Redeploy after saving env vars (Deployments → … → Redeploy)
-5. In Supabase Auth URL settings, add your `*.vercel.app` (and custom domain) Site URL + `/auth/callback`
-
-Without the Supabase env vars, the homepage may load after this fix, but login/signup will not work.
-
 ## What you can do
 
-- Sign up / log in
-- Create a league (get an invite code)
-- Join a league with a code
-- Create games with a unit wager
-- Add players, set placements, settle the pot
-- League standings (wins + net units)
+- Create a **league** (invite code, optional season entry fee)
+- Create a **game** or **tournament** (standalone or in a league)
+- Pick from the **game catalog** (scoring modes: higher/lower/placement/H2H/custom)
+- Set **entry fee**, wager mode **none / pot / odds**
+- Write fractional odds (**2 to 1**, etc.) and settle
+- View catalog at `/catalog` — send more games later to seed
 
-## Project layout
+## Vercel
 
-```
-src/app/           # pages + server actions
-src/lib/supabase/  # browser / server / middleware clients
-supabase/migrations # SQL schema + RLS
-```
+Env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_APP_URL`  
+Production: https://the-league-ivory.vercel.app

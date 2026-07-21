@@ -33,7 +33,11 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isProtected = path.startsWith("/app") || path.startsWith("/leagues");
+  const isProtected =
+    path.startsWith("/app") ||
+    path.startsWith("/leagues") ||
+    path.startsWith("/events") ||
+    path.startsWith("/catalog");
 
   if (!user && isProtected) {
     const redirectUrl = request.nextUrl.clone();

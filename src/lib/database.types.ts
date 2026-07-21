@@ -20,6 +20,7 @@ type Leagues = {
   description: string | null;
   invite_code: string;
   created_by: string;
+  default_entry_fee_units: number;
   created_at: string;
   updated_at: string;
 };
@@ -29,6 +30,61 @@ type LeagueMembers = {
   user_id: string;
   role: string;
   joined_at: string;
+};
+
+type GameCatalog = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  scoring_mode: string;
+  scoring_config: Json;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+};
+
+type Events = {
+  id: string;
+  kind: string;
+  league_id: string | null;
+  catalog_id: string;
+  title: string;
+  status: string;
+  notes: string | null;
+  entry_fee_units: number;
+  wager_mode: string;
+  default_stake_units: number;
+  bracket_size: number | null;
+  format: string | null;
+  created_by: string;
+  played_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type EventPlayers = {
+  event_id: string;
+  user_id: string;
+  seed: number | null;
+  side_label: string | null;
+  score: number | null;
+  placement: number | null;
+  outcome: string | null;
+  entry_paid: boolean;
+  units_paid: number;
+  units_delta: number;
+};
+
+type WagerLines = {
+  id: string;
+  event_id: string;
+  player_id: string | null;
+  side_label: string | null;
+  odds_num: number;
+  odds_den: number;
+  stake_units: number;
+  created_at: string;
 };
 
 type GameTypes = {
@@ -83,6 +139,7 @@ export type Database = {
           description?: string | null;
           invite_code?: string;
           created_by: string;
+          default_entry_fee_units?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -98,6 +155,77 @@ export type Database = {
           joined_at?: string;
         };
         Update: Partial<LeagueMembers>;
+        Relationships: [];
+      };
+      game_catalog: {
+        Row: GameCatalog;
+        Insert: {
+          id?: string;
+          slug: string;
+          name: string;
+          description?: string | null;
+          scoring_mode?: string;
+          scoring_config?: Json;
+          is_active?: boolean;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: Partial<GameCatalog>;
+        Relationships: [];
+      };
+      events: {
+        Row: Events;
+        Insert: {
+          id?: string;
+          kind: string;
+          league_id?: string | null;
+          catalog_id: string;
+          title: string;
+          status?: string;
+          notes?: string | null;
+          entry_fee_units?: number;
+          wager_mode?: string;
+          default_stake_units?: number;
+          bracket_size?: number | null;
+          format?: string | null;
+          created_by: string;
+          played_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Events>;
+        Relationships: [];
+      };
+      event_players: {
+        Row: EventPlayers;
+        Insert: {
+          event_id: string;
+          user_id: string;
+          seed?: number | null;
+          side_label?: string | null;
+          score?: number | null;
+          placement?: number | null;
+          outcome?: string | null;
+          entry_paid?: boolean;
+          units_paid?: number;
+          units_delta?: number;
+        };
+        Update: Partial<EventPlayers>;
+        Relationships: [];
+      };
+      wager_lines: {
+        Row: WagerLines;
+        Insert: {
+          id?: string;
+          event_id: string;
+          player_id?: string | null;
+          side_label?: string | null;
+          odds_num: number;
+          odds_den: number;
+          stake_units?: number;
+          created_at?: string;
+        };
+        Update: Partial<WagerLines>;
         Relationships: [];
       };
       game_types: {
@@ -160,8 +288,27 @@ export type Database = {
         Returns: Leagues;
       };
       create_league: {
-        Args: { p_name: string; p_description?: string | null };
+        Args: {
+          p_name: string;
+          p_description?: string | null;
+          p_entry_fee?: number;
+        };
         Returns: Leagues;
+      };
+      create_event: {
+        Args: {
+          p_kind: string;
+          p_title: string;
+          p_catalog_id: string;
+          p_league_id?: string | null;
+          p_entry_fee?: number;
+          p_wager_mode?: string;
+          p_stake?: number;
+          p_notes?: string | null;
+          p_format?: string | null;
+          p_bracket_size?: number | null;
+        };
+        Returns: Events;
       };
     };
     Enums: Record<string, never>;
