@@ -73,6 +73,57 @@ export async function joinLeague(formData: FormData) {
   redirect(`/leagues/${data.id}`);
 }
 
+function slugify(name: string): string {
+  const base = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+  return `${base || "game"}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export async function createCustomGame(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const scoringMode = String(formData.get("scoring_mode") ?? "custom");
+
+  const allowed: ScoringMode[] = [
+    "higher_wins",
+    "lower_wins",
+    "placement",
+    "head_to_head",
+    "custom",
+  ];
+  if (!name) fail("Game name is required.");
+  if (!allowed.includes(scoringMode as ScoringMode)) {
+    fail("Invalid scoring mode.");
+  }
+
+  const { supabase, user } = await ensureProfile();
+
+  const { data, error } = await supabase
+    .from("game_catalog")
+    .insert({
+      slug: slugify(name),
+      name,
+      description: description || null,
+      scoring_mode: scoringMode,
+      scoring_config: {},
+      is_active: true,
+      is_system: false,
+      created_by: user.id,
+      sort_order: 500,
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) fail(error?.message ?? "Could not create game.");
+
+  revalidatePath("/catalog");
+  revalidatePath("/create");
+  redirect("/catalog");
+}
+
 export async function createEvent(formData: FormData) {
   const kind = String(formData.get("kind") ?? "game");
   const title = String(formData.get("title") ?? "").trim();

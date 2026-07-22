@@ -13,34 +13,15 @@ Friendly group wagers and standings — **Next.js** on **Vercel**, **Supabase** 
 
 ## Database setup (run in order)
 
-In the Supabase SQL Editor for project `wbwdmxlroniuacibeirg` (or your League project):
+In the Supabase SQL Editor for your League project:
 
-1. [`supabase/migrations/20260721_init.sql`](./supabase/migrations/20260721_init.sql) — if not already applied  
-2. [`supabase/migrations/20260721_fix_create_league.sql`](./supabase/migrations/20260721_fix_create_league.sql) — if create-league was broken  
-3. **[`supabase/migrations/20260721_competitions_catalog_odds.sql`](./supabase/migrations/20260721_competitions_catalog_odds.sql)** — catalog, events, odds, entry fees  
-
-Then Auth → URL config: Site URL + `/auth/callback` for localhost and Vercel.
-
-## Local env
-
-```bash
-cd the-league
-cp .env.example .env.local
-# fill NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY
-npm install
-npm run dev
-```
+1. [`20260721_init.sql`](./supabase/migrations/20260721_init.sql) — if not already applied  
+2. [`20260721_fix_create_league.sql`](./supabase/migrations/20260721_fix_create_league.sql) — if needed  
+3. [`20260721_competitions_catalog_odds.sql`](./supabase/migrations/20260721_competitions_catalog_odds.sql) — events / odds  
+4. **[`20260722_catalog_bbq_games.sql`](./supabase/migrations/20260722_catalog_bbq_games.sql)** — golf, cornhole, darts, disc golf, card & yard games + user-defined games  
 
 ## What you can do
 
-- Create a **league** (invite code, optional season entry fee)
-- Create a **game** or **tournament** (standalone or in a league)
-- Pick from the **game catalog** (scoring modes: higher/lower/placement/H2H/custom)
-- Set **entry fee**, wager mode **none / pot / odds**
-- Write fractional odds (**2 to 1**, etc.) and settle
-- View catalog at `/catalog` — send more games later to seed
-
-## Vercel
-
-Env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_APP_URL`  
-Production: https://the-league-ivory.vercel.app
+- Create leagues, games, tournaments via the wizard (pick players from the user list)
+- Catalog: golf, cornhole, darts, disc golf, cards, horseshoes, washers, ladder ball, KanJam, bocce, Spikeball, beer pong, and more
+- **Define your own game** on `/catalog` (name + scoring mode)

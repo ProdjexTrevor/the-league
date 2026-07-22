@@ -42,6 +42,8 @@ type GameCatalog = {
   is_active: boolean;
   sort_order: number;
   created_at: string;
+  created_by: string | null;
+  is_system: boolean;
 };
 
 type Events = {
@@ -169,6 +171,8 @@ export type Database = {
           is_active?: boolean;
           sort_order?: number;
           created_at?: string;
+          created_by?: string | null;
+          is_system?: boolean;
         };
         Update: Partial<GameCatalog>;
         Relationships: [];
