@@ -23,6 +23,13 @@ async function ensureProfile() {
   } = await supabase.auth.getUser();
   if (!user) fail("Not signed in.");
 
+  const venmo = user.user_metadata?.venmo_username
+    ? String(user.user_metadata.venmo_username)
+        .trim()
+        .replace(/^@+/, "")
+        .toLowerCase()
+    : null;
+
   await supabase.from("profiles").upsert(
     {
       id: user.id,
@@ -30,11 +37,64 @@ async function ensureProfile() {
         (user.user_metadata?.display_name as string | undefined) ||
         user.email?.split("@")[0] ||
         "Player",
+      ...(venmo ? { venmo_username: venmo } : {}),
     },
     { onConflict: "id" }
   );
 
   return { supabase, user };
+}
+
+export async function updateVenmoUsername(formData: FormData) {
+  const raw = String(formData.get("venmo_username") ?? "").trim();
+  const venmo = raw.replace(/^@+/, "").toLowerCase();
+  if (!venmo) fail("Venmo username is required.");
+  if (!/^[a-z0-9_-]{3,30}$/i.test(venmo)) {
+    fail("Enter a valid Venmo username (letters, numbers, _ or -).");
+  }
+
+  const { supabase, user } = await ensureProfile();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ venmo_username: venmo })
+    .eq("id", user.id);
+  if (error) fail(error.message);
+
+  await supabase.auth.updateUser({ data: { venmo_username: venmo } });
+
+  revalidatePath("/wallet");
+  revalidatePath("/app");
+}
+
+export async function markObligationPaid(formData: FormData) {
+  const id = String(formData.get("obligation_id") ?? "");
+  if (!id) fail("Missing obligation.");
+
+  const { supabase, user } = await ensureProfile();
+  const { error } = await supabase
+    .from("wallet_obligations")
+    .update({ status: "paid", paid_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("from_user_id", user.id);
+  if (error) fail(error.message);
+
+  revalidatePath("/wallet");
+}
+
+export async function markCounterpartyPaid(formData: FormData) {
+  const counterpartyId = String(formData.get("counterparty_id") ?? "");
+  if (!counterpartyId) fail("Missing player.");
+
+  const { supabase, user } = await ensureProfile();
+  const { error } = await supabase
+    .from("wallet_obligations")
+    .update({ status: "paid", paid_at: new Date().toISOString() })
+    .eq("from_user_id", user.id)
+    .eq("to_user_id", counterpartyId)
+    .eq("status", "open");
+  if (error) fail(error.message);
+
+  revalidatePath("/wallet");
 }
 
 export async function createLeague(formData: FormData) {
@@ -440,10 +500,16 @@ export async function settleEvent(eventId: string, formData: FormData) {
 
   if (eventError) fail(eventError.message);
 
+  const { error: obligError } = await supabase.rpc("record_event_obligations", {
+    p_event_id: eventId,
+  });
+  if (obligError) fail(obligError.message);
+
   void user;
   revalidatePath(`/events/${eventId}`);
   if (event.league_id) revalidatePath(`/leagues/${event.league_id}`);
   revalidatePath("/app");
+  revalidatePath("/wallet");
 }
 
 // --- Legacy game helpers (old routes) ------------------------------------------

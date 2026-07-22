@@ -76,6 +76,9 @@ export default async function AppPage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
+          <Link href="/wallet" className="text-sm text-muted hover:text-fg">
+            Wallet
+          </Link>
           <Link href="/catalog" className="text-sm text-muted hover:text-fg">
             Catalog
           </Link>

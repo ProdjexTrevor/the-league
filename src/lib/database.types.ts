@@ -10,6 +10,7 @@ type Profiles = {
   id: string;
   display_name: string;
   avatar_url: string | null;
+  venmo_username: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -127,6 +128,7 @@ export type Database = {
           id: string;
           display_name: string;
           avatar_url?: string | null;
+          venmo_username?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -273,6 +275,42 @@ export type Database = {
         Update: Partial<GamePlayers>;
         Relationships: [];
       };
+      wallet_obligations: {
+        Row: {
+          id: string;
+          event_id: string;
+          from_user_id: string;
+          to_user_id: string;
+          amount: number;
+          status: string;
+          note: string | null;
+          created_at: string;
+          paid_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          from_user_id: string;
+          to_user_id: string;
+          amount: number;
+          status?: string;
+          note?: string | null;
+          created_at?: string;
+          paid_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          event_id?: string;
+          from_user_id?: string;
+          to_user_id?: string;
+          amount?: number;
+          status?: string;
+          note?: string | null;
+          created_at?: string;
+          paid_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       league_standings: {
@@ -282,6 +320,22 @@ export type Database = {
           games_played: number | null;
           wins: number | null;
           net_units: number | null;
+        };
+        Relationships: [];
+      };
+      wallet_balances_owed: {
+        Row: {
+          user_id: string | null;
+          counterparty_id: string | null;
+          amount_owed: number | null;
+        };
+        Relationships: [];
+      };
+      wallet_balances_due: {
+        Row: {
+          user_id: string | null;
+          counterparty_id: string | null;
+          amount_due: number | null;
         };
         Relationships: [];
       };
@@ -313,6 +367,10 @@ export type Database = {
           p_bracket_size?: number | null;
         };
         Returns: Events;
+      };
+      record_event_obligations: {
+        Args: { p_event_id: string };
+        Returns: undefined;
       };
     };
     Enums: Record<string, never>;
