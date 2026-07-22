@@ -1,36 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 
-export default function LoginForm() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/app";
+export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setMessage(null);
+
     const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+    const origin = window.location.origin;
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${origin}/update-password`,
     });
+
     setLoading(false);
-    if (signInError) {
-      setError(signInError.message);
+    if (resetError) {
+      setError(resetError.message);
       return;
     }
-    router.push(next);
-    router.refresh();
+    setMessage("Check your email for a reset link. It opens this site so you can set a new password.");
   }
 
   return (
@@ -39,8 +37,10 @@ export default function LoginForm() {
         <Link href="/" className="font-display text-3xl text-fg">
           THE LEAGUE
         </Link>
-        <h1 className="mt-10 text-2xl font-semibold tracking-tight">Log in</h1>
-        <p className="mt-2 text-sm text-muted">Pick up where your standings left off.</p>
+        <h1 className="mt-10 text-2xl font-semibold tracking-tight">Reset password</h1>
+        <p className="mt-2 text-sm text-muted">
+          We&apos;ll email you a link that opens The League so you can choose a new password.
+        </p>
 
         <form onSubmit={onSubmit} className="mt-8 space-y-4">
           <label className="block text-sm">
@@ -53,36 +53,20 @@ export default function LoginForm() {
               className="mt-1.5 w-full rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-fg outline-none focus:border-accent"
             />
           </label>
-          <label className="block text-sm">
-            <span className="text-muted">Password</span>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1.5 w-full rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-fg outline-none focus:border-accent"
-            />
-          </label>
           {error && <p className="text-sm text-danger">{error}</p>}
+          {message && <p className="text-sm text-accent">{message}</p>}
           <button
             type="submit"
             disabled={loading}
             className="w-full rounded-sm bg-accent py-3 text-sm font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-60"
           >
-            {loading ? "Signing in…" : "Log in"}
+            {loading ? "Sending…" : "Send reset link"}
           </button>
         </form>
 
         <p className="mt-6 text-sm text-muted">
-          <Link href="/forgot-password" className="text-accent hover:underline">
-            Forgot password?
-          </Link>
-        </p>
-        <p className="mt-3 text-sm text-muted">
-          New here?{" "}
-          <Link href="/signup" className="text-accent hover:underline">
-            Create an account
+          <Link href="/login" className="text-accent hover:underline">
+            Back to log in
           </Link>
         </p>
       </div>

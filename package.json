@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "slack:bridge": "npm --prefix tools/slack-agent-bridge run start",
+    "slack:bridge:dev": "npm --prefix tools/slack-agent-bridge run dev"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

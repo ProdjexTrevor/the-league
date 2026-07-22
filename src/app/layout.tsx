@@ -1,6 +1,8 @@
 import { Bebas_Neue, DM_Sans } from "next/font/google";
 import type { Metadata } from "next";
 
+import { AuthRecoveryRedirect } from "@/components/auth-recovery-redirect";
+
 import "./globals.css";
 
 const display = Bebas_Neue({
@@ -26,7 +28,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${display.variable} ${sans.variable} h-full`}>
-      <body className="min-h-full font-sans antialiased">{children}</body>
+      <body className="min-h-full font-sans antialiased">
+        <AuthRecoveryRedirect />
+        {children}
+      </body>
     </html>
   );
 }

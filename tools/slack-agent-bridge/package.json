@@ -1,0 +1,26 @@
+{
+  "name": "slack-agent-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Portable Slack → Cursor Agent CLI bridge. Drop into tools/, then ask Cursor to follow CURSOR_INSTALL.md.",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "check-auth": "tsx src/check-auth.ts",
+    "join-channel": "tsx src/join-channel.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@slack/bolt": "^4.2.1",
+    "dotenv": "^16.4.7",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.5.3",
+    "vitest": "^2.1.9"
+  }
+}

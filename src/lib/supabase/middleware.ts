@@ -48,7 +48,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (user && (path === "/login" || path === "/signup")) {
+  // Keep recovery sessions on /update-password so they can set a new password.
+  if (
+    user &&
+    (path === "/login" || path === "/signup" || path === "/forgot-password")
+  ) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/app";
     return NextResponse.redirect(redirectUrl);
