@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { createEvent } from "@/app/actions";
 import { createClient } from "@/lib/supabase/server";
-import { scoringModeLabel, type ScoringMode } from "@/lib/wager";
 
 export const dynamic = "force-dynamic";
 
@@ -25,32 +23,23 @@ export default async function LeaguePage({ params }: Props) {
 
   if (!league) notFound();
 
-  const [
-    { data: members },
-    { data: events },
-    { data: catalog },
-    { data: standings },
-  ] = await Promise.all([
-    supabase
-      .from("league_members")
-      .select("role, user_id, profiles(display_name)")
-      .eq("league_id", id),
-    supabase
-      .from("events")
-      .select("id, title, kind, status, wager_mode, entry_fee_units, created_at")
-      .eq("league_id", id)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("game_catalog")
-      .select("id, name, scoring_mode")
-      .eq("is_active", true)
-      .order("sort_order"),
-    supabase
-      .from("league_standings")
-      .select("user_id, games_played, wins, net_units")
-      .eq("league_id", id)
-      .order("net_units", { ascending: false }),
-  ]);
+  const [{ data: members }, { data: events }, { data: standings }] =
+    await Promise.all([
+      supabase
+        .from("league_members")
+        .select("role, user_id, profiles(display_name)")
+        .eq("league_id", id),
+      supabase
+        .from("events")
+        .select("id, title, kind, status, wager_mode, entry_fee_units, created_at")
+        .eq("league_id", id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("league_standings")
+        .select("user_id, games_played, wins, net_units")
+        .eq("league_id", id)
+        .order("net_units", { ascending: false }),
+    ]);
 
   const nameById = new Map(
     members?.map((m) => {
@@ -58,20 +47,6 @@ export default async function LeaguePage({ params }: Props) {
       return [m.user_id, profile?.display_name ?? "Player"] as const;
     })
   );
-
-  async function createGameAction(formData: FormData) {
-    "use server";
-    formData.set("kind", "game");
-    formData.set("league_id", id);
-    return createEvent(formData);
-  }
-
-  async function createTournamentAction(formData: FormData) {
-    "use server";
-    formData.set("kind", "tournament");
-    formData.set("league_id", id);
-    return createEvent(formData);
-  }
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-3xl px-6 py-10 pb-20">
@@ -93,6 +68,20 @@ export default async function LeaguePage({ params }: Props) {
             <> · season entry {league.default_entry_fee_units}</>
           )}
         </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link
+            href={`/create?league=${id}&kind=game`}
+            className="rounded-sm bg-accent px-4 py-2.5 text-sm font-semibold text-accent-ink hover:brightness-110"
+          >
+            Start a game
+          </Link>
+          <Link
+            href={`/create?league=${id}&kind=tournament`}
+            className="rounded-sm border border-line px-4 py-2.5 text-sm hover:border-fg/40"
+          >
+            Start a tournament
+          </Link>
+        </div>
       </header>
 
       <section className="mt-12">
@@ -150,24 +139,6 @@ export default async function LeaguePage({ params }: Props) {
       </section>
 
       <section className="mt-12">
-        <h2 className="text-lg font-semibold">New game in this league</h2>
-        <EventCreateFields
-          action={createGameAction}
-          catalog={catalog ?? []}
-          kind="game"
-        />
-      </section>
-
-      <section className="mt-10">
-        <h2 className="text-lg font-semibold">New tournament in this league</h2>
-        <EventCreateFields
-          action={createTournamentAction}
-          catalog={catalog ?? []}
-          kind="tournament"
-        />
-      </section>
-
-      <section className="mt-12">
         <h2 className="text-lg font-semibold">Events</h2>
         {!events?.length ? (
           <p className="mt-3 text-sm text-muted">No games or tournaments yet.</p>
@@ -196,85 +167,5 @@ export default async function LeaguePage({ params }: Props) {
         )}
       </section>
     </main>
-  );
-}
-
-function EventCreateFields({
-  action,
-  catalog,
-  kind,
-}: {
-  action: (formData: FormData) => Promise<void>;
-  catalog: { id: string; name: string; scoring_mode: string }[];
-  kind: "game" | "tournament";
-}) {
-  return (
-    <form action={action} className="mt-4 grid gap-3 sm:grid-cols-2">
-      <input
-        name="title"
-        required
-        placeholder="Title"
-        className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:col-span-2"
-      />
-      <select
-        name="catalog_id"
-        required
-        defaultValue=""
-        className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:col-span-2"
-      >
-        <option value="" disabled>
-          Game from catalog
-        </option>
-        {catalog.map((g) => (
-          <option key={g.id} value={g.id}>
-            {g.name} — {scoringModeLabel(g.scoring_mode as ScoringMode)}
-          </option>
-        ))}
-      </select>
-      <input
-        name="entry_fee"
-        type="number"
-        min={0}
-        step={1}
-        defaultValue={0}
-        placeholder="Entry fee"
-        className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
-      />
-      <select
-        name="wager_mode"
-        defaultValue="pot"
-        className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
-      >
-        <option value="none">No wager</option>
-        <option value="pot">Equal pot</option>
-        <option value="odds">Odds (2 to 1)</option>
-      </select>
-      <input
-        name="stake"
-        type="number"
-        min={0}
-        step={1}
-        defaultValue={10}
-        placeholder="Stake units"
-        className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
-      />
-      {kind === "tournament" && (
-        <select
-          name="format"
-          defaultValue="single_elim"
-          className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
-        >
-          <option value="single_elim">Single elimination</option>
-          <option value="round_robin">Round robin</option>
-          <option value="custom">Custom</option>
-        </select>
-      )}
-      <button
-        type="submit"
-        className="rounded-sm bg-accent px-4 py-2.5 text-sm font-semibold text-accent-ink hover:brightness-110 sm:col-span-2 sm:w-fit"
-      >
-        Create {kind}
-      </button>
-    </form>
   );
 }

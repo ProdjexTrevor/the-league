@@ -90,8 +90,22 @@ export async function createEvent(formData: FormData) {
   if (!title || !catalogId) fail("Title and game are required.");
   if (kind !== "game" && kind !== "tournament") fail("Invalid event kind.");
 
-  await ensureProfile();
-  const supabase = await createClient();
+  const playerIds = [
+    ...new Set(
+      formData
+        .getAll("player_id")
+        .map((v) => String(v))
+        .filter(Boolean)
+    ),
+  ];
+  if (playerIds.length < 2) {
+    fail("Select at least two players from the user list to start.");
+  }
+
+  const { supabase, user } = await ensureProfile();
+  if (!playerIds.includes(user.id)) {
+    playerIds.push(user.id);
+  }
 
   const { data, error } = await supabase.rpc("create_event", {
     p_kind: kind,
@@ -111,7 +125,20 @@ export async function createEvent(formData: FormData) {
 
   if (error || !data) fail(error?.message ?? "Could not create event.");
 
-  // Optional initial odds lines: odds_player_<userId>_num / _den or odds_side_<label>
+  // Creator is already inserted by create_event RPC; add the rest
+  const entry = Number(data.entry_fee_units) || 0;
+  for (const playerId of playerIds) {
+    if (playerId === data.created_by) continue;
+    const { error: playerError } = await supabase.from("event_players").insert({
+      event_id: data.id,
+      user_id: playerId,
+      entry_paid: entry > 0,
+      units_paid: entry,
+    });
+    if (playerError) fail(playerError.message);
+  }
+
+  // Optional initial odds lines
   if (wagerMode === "odds") {
     const stakeDefault = Number.isFinite(stake) ? stake : 0;
     for (const [key, value] of formData.entries()) {
