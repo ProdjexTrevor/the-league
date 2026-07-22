@@ -43,3 +43,7 @@ next-env.d.ts
 
 .vercel
 .env*.local
+
+.env.vercel*
+.env.vercel.check
+

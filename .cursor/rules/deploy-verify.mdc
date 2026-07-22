@@ -1,0 +1,22 @@
+---
+description: After every push, prove Vercel Ready for that commit before claiming done
+alwaysApply: true
+---
+
+# Deploy verification after push
+
+You are **not done** after `git push`. Confirm the **Vercel deployment for that exact commit** is **Ready**.
+
+## Checklist
+
+1. Push (default `main` for this repo unless told otherwise).
+2. Capture SHA: `git rev-parse HEAD`.
+3. Find **that SHA** via `npx vercel ls` / `npx vercel inspect` — do not assume the newest Ready deploy is yours.
+4. Poll until **Ready** or **Error**. Do not stop while Building/Queued.
+5. On Error: inspect logs, fix, commit, push, repeat.
+6. Report: SHA + deployment URL + Ready proof (command output). If blocked: `pushed but unverified: <reason>`.
+
+## Evidence rule
+
+- Never say Ready without reading command output for **your** commit.
+- Never match an older deployment by accident.

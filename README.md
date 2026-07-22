@@ -11,9 +11,13 @@ Friendly group wagers and standings — **Next.js** on **Vercel**, **Supabase** 
 - Supabase Postgres + RLS
 - Deploy target: Vercel
 
+## Agent workflow
+
+Every change: **Plan → Build → Test → Push (verify Vercel Ready) → Mobile/TestFlight**. See `AGENTS.md` and `.cursor/rules/`.
+
 ## Database setup (run in order)
 
-In the Supabase SQL Editor for your League project:
+In the Supabase SQL Editor for your League project (`wbwdmxlroniuacibeirg`):
 
 1. [`20260721_init.sql`](./supabase/migrations/20260721_init.sql) — if not already applied  
 2. [`20260721_fix_create_league.sql`](./supabase/migrations/20260721_fix_create_league.sql) — if needed  
@@ -21,6 +25,7 @@ In the Supabase SQL Editor for your League project:
 4. [`20260722_catalog_bbq_games.sql`](./supabase/migrations/20260722_catalog_bbq_games.sql) — yard/BBQ catalog + custom games  
 5. **[`20260722_venmo_wallet.sql`](./supabase/migrations/20260722_venmo_wallet.sql)** — Venmo username + wallet payouts  
 
+Agents cannot apply these via Cursor’s Supabase MCP until that MCP is pointed at League (it may still be Grind Pass). Until then, run SQL in the League dashboard or link the Supabase CLI with a DB password / access token.
 ## Wallet / Venmo
 
 - Signup collects **Venmo username**

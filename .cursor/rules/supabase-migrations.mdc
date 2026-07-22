@@ -1,0 +1,33 @@
+---
+description: League Supabase migrations — correct project, how to apply, known gaps
+alwaysApply: true
+---
+
+# Supabase migrations (The League)
+
+## Correct project
+
+- League Supabase ref: **`wbwdmxlroniuacibeirg`**
+- Production app: `https://the-league-ivory.vercel.app`
+- Cursor Supabase MCP may still point at **Grind Pass** (`nzynzcgxfxtdtqkumobw`) — **do not** run League migrations through MCP until MCP is retargeted to League.
+
+## Migration files
+
+Live under `supabase/migrations/`. Apply in filename order unless a file says otherwise.
+
+## How to apply (until CLI is linked)
+
+1. Open League project SQL Editor in the Supabase dashboard.
+2. Paste the migration SQL and run it.
+3. Or use `psql` / Supabase CLI against League with a real `DATABASE_URL` / linked project.
+
+## Agent requirements before claiming migrations applied
+
+- Confirm target project ref is League.
+- Prefer idempotent SQL (`if not exists`, etc.).
+- After apply, verify with a read (table/column exists) when DB access is available.
+
+## Do not
+
+- Apply League SQL to Grind Pass.
+- Invent schema that contradicts existing migrations without a new migration file.

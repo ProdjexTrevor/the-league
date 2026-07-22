@@ -1,0 +1,59 @@
+---
+description: Mandatory delivery pipeline — Plan → Build → Test → Push → TestFlight
+alwaysApply: true
+---
+
+# The League delivery pipeline (always)
+
+Every feature or fix goes through **all** stages below unless the user explicitly skips a stage.
+
+```text
+1. PLAN   → 2. BUILD   → 3. TEST   → 4. PUSH + VERIFY DEPLOY   → 5. MOBILE / TESTFLIGHT
+```
+
+## 1. Plan
+
+- Restate the goal in 1–3 bullets.
+- List files / schema / UX touchpoints.
+- Call out risks (auth, RLS, money/Venmo, migrations).
+- Do not edit code until the plan is clear (short plan is fine for tiny fixes).
+
+## 2. Build
+
+- Implement against existing patterns in `src/` and `supabase/migrations/`.
+- Stack: Next.js 16, Supabase Auth, Supabase Postgres, Vercel.
+- Venmo = deep-link IOUs only — never invent payment APIs.
+- New SQL goes in `supabase/migrations/` with a dated filename; apply to League project `wbwdmxlroniuacibeirg` (never Grind Pass).
+
+## 3. Test
+
+- Run what the change needs: usually `npm run build`; add targeted checks for the feature.
+- Fix failures before push.
+- A task is **not** ready to push if build/tests fail.
+
+## 4. Push + verify deploy
+
+- As soon as tests pass: **commit and push** (default branch: `main` unless the user names another).
+- Then verify the **Vercel deployment for that exact commit** is Ready (see `deploy-verify` rule).
+- Do not claim done on "pushed only."
+
+## 5. Mobile / TestFlight
+
+- After web is pushed and verified, advance the **native** track:
+  - If an Expo/React Native (or other) app exists: apply the same change (or shared API contract), run a TestFlight-bound build (`eas build` / App Store Connect flow as configured).
+  - If no mobile app exists yet: either scaffold the Expo app toward TestFlight **or** report clearly `TestFlight blocked: no mobile app yet` and what is needed (Apple team, EAS project, bundle id) — do not silently skip.
+- Web-only docs/tooling (e.g. Slack bridge) may skip TestFlight when there is no user-facing app change; say so explicitly.
+
+## Done means
+
+```text
+✅ Planned → built → tested → pushed → that commit's Vercel Ready → mobile/TestFlight handled or explicitly blocked with reason
+❌ Built only
+❌ Tested locally but not pushed
+❌ Pushed without deploy proof
+❌ Shipped web and ignored mobile when the feature is user-facing
+```
+
+## Overrides
+
+User phrases like "don't push", "web only", "skip TestFlight", or "local only" win for that turn.
