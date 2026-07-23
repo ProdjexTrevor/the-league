@@ -1,5 +1,5 @@
 import { Bebas_Neue, DM_Sans } from "next/font/google";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 import { AuthRecoveryRedirect } from "@/components/auth-recovery-redirect";
 
@@ -19,6 +19,12 @@ const sans = DM_Sans({
 export const metadata: Metadata = {
   title: "The League",
   description: "Friendly wagers. Real standings. Your crew.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

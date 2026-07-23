@@ -24,12 +24,31 @@
   --font-display: var(--font-display);
 }
 
+html {
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
+  overflow-x: clip;
   background:
     radial-gradient(1200px 600px at 10% -10%, rgba(214, 255, 75, 0.08), transparent 55%),
     radial-gradient(900px 500px at 90% 0%, rgba(90, 140, 110, 0.18), transparent 50%),
     var(--bg);
   color: var(--fg);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* iOS Safari zooms focused inputs under 16px — keep controls readable without zoom. */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea,
+  button {
+    font-size: 16px;
+  }
 }
 
 .font-display {

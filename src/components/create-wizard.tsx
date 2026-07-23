@@ -45,7 +45,7 @@ type Props = {
 };
 
 const inputClass =
-  "w-full rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm text-fg outline-none focus:border-accent";
+  "w-full rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-base text-fg outline-none focus:border-accent sm:text-sm";
 const labelClass = "mb-1.5 block text-sm text-muted";
 const choiceClass =
   "w-full rounded-sm border border-line px-4 py-4 text-left transition hover:border-accent/50 hover:bg-fg/[0.03]";
@@ -369,7 +369,7 @@ export function CreateWizard({
             />
           ))}
         </div>
-        <h1 className="mt-6 font-display text-4xl text-fg md:text-5xl">
+        <h1 className="mt-6 font-display break-words text-3xl text-fg sm:text-4xl md:text-5xl">
           {steps[step]}
         </h1>
       </div>
@@ -789,8 +789,10 @@ export function CreateWizard({
                           key={id}
                           className="flex flex-wrap items-center justify-between gap-2 text-sm"
                         >
-                          <span className="min-w-[7rem] font-medium">{name}</span>
-                          <div className="flex items-center gap-1.5">
+                          <span className="min-w-0 flex-1 break-words font-medium">
+                            {name}
+                          </span>
+                          <div className="flex shrink-0 items-center gap-1.5">
                             <input
                               type="number"
                               min={1}
@@ -801,7 +803,7 @@ export function CreateWizard({
                                   [id]: { ...o, num: e.target.value },
                                 }))
                               }
-                              className="w-16 rounded-sm border border-line bg-bg-elevated px-2 py-2 text-sm outline-none focus:border-accent"
+                              className="w-16 rounded-sm border border-line bg-bg-elevated px-2 py-2 text-base outline-none focus:border-accent sm:text-sm"
                               aria-label={`${name} odds numerator`}
                             />
                             <span className="text-muted">to</span>
@@ -815,7 +817,7 @@ export function CreateWizard({
                                   [id]: { ...o, den: e.target.value },
                                 }))
                               }
-                              className="w-16 rounded-sm border border-line bg-bg-elevated px-2 py-2 text-sm outline-none focus:border-accent"
+                              className="w-16 rounded-sm border border-line bg-bg-elevated px-2 py-2 text-base outline-none focus:border-accent sm:text-sm"
                               aria-label={`${name} odds denominator`}
                             />
                           </div>
@@ -1019,7 +1021,7 @@ export function CreateWizard({
 
       {error && <p className="mt-4 text-sm text-danger">{error}</p>}
 
-      <div className="mt-10 flex items-center justify-between gap-3">
+      <div className="mt-10 flex items-center justify-between gap-3 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         <button
           type="button"
           onClick={goBack}
@@ -1042,7 +1044,7 @@ export function CreateWizard({
             type="button"
             onClick={submit}
             disabled={pending}
-            className="rounded-sm bg-accent px-5 py-2.5 text-sm font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-50"
+            className="min-w-0 rounded-sm bg-accent px-5 py-2.5 text-sm font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-50"
           >
             {pending
               ? "Creating…"
@@ -1066,10 +1068,12 @@ function Review({ rows }: { rows: [string, string][] }) {
       {rows.map(([k, v], i) => (
         <div
           key={`${k}-${i}`}
-          className="flex items-start justify-between gap-4 py-3 text-sm"
+          className="flex items-start justify-between gap-3 py-3 text-sm sm:gap-4"
         >
           <dt className="shrink-0 text-muted">{k}</dt>
-          <dd className="text-right font-medium text-fg">{v}</dd>
+          <dd className="min-w-0 break-words text-right font-medium text-fg">
+            {v}
+          </dd>
         </div>
       ))}
     </dl>

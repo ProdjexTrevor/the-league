@@ -65,17 +65,17 @@ export default async function AppPage() {
       .filter(Boolean) ?? [];
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-3xl px-6 py-10">
-      <header className="flex items-start justify-between gap-4">
-        <div>
+    <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <Link href="/" className="font-display text-2xl text-fg">
             THE LEAGUE
           </Link>
-          <p className="mt-2 text-sm text-muted">
+          <p className="mt-2 break-words text-sm text-muted">
             Hey {profile?.display_name ?? "player"}
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <nav className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link href="/wallet" className="text-sm text-muted hover:text-fg">
             Wallet
           </Link>
@@ -87,7 +87,7 @@ export default async function AppPage() {
               Sign out
             </button>
           </form>
-        </div>
+        </nav>
       </header>
 
       <div className="mt-10">
@@ -115,16 +115,16 @@ export default async function AppPage() {
               <li key={event.id}>
                 <Link
                   href={`/events/${event.id}`}
-                  className="flex items-center justify-between gap-4 py-4 transition hover:bg-fg/[0.03]"
+                  className="flex items-start justify-between gap-3 py-4 transition hover:bg-fg/[0.03] sm:items-center sm:gap-4"
                 >
-                  <div>
-                    <p className="font-medium">{event.title}</p>
+                  <div className="min-w-0">
+                    <p className="break-words font-medium">{event.title}</p>
                     <p className="mt-0.5 text-sm text-muted">
                       {event.kind} · {event.wager_mode} · entry{" "}
                       {event.entry_fee_units}
                     </p>
                   </div>
-                  <span className="text-xs uppercase tracking-wider text-muted">
+                  <span className="shrink-0 pt-0.5 text-xs uppercase tracking-wider text-muted sm:pt-0">
                     {event.status}
                   </span>
                 </Link>
@@ -151,17 +151,17 @@ export default async function AppPage() {
                 <li key={league.id}>
                   <Link
                     href={`/leagues/${league.id}`}
-                    className="flex items-center justify-between gap-4 py-4 transition hover:bg-fg/[0.03]"
+                    className="flex items-start justify-between gap-3 py-4 transition hover:bg-fg/[0.03] sm:items-center sm:gap-4"
                   >
-                    <div>
-                      <p className="font-medium">{league.name}</p>
+                    <div className="min-w-0">
+                      <p className="break-words font-medium">{league.name}</p>
                       {league.description && (
-                        <p className="mt-0.5 text-sm text-muted">
+                        <p className="mt-0.5 break-words text-sm text-muted">
                           {league.description}
                         </p>
                       )}
                     </div>
-                    <span className="text-xs uppercase tracking-wider text-muted">
+                    <span className="shrink-0 pt-0.5 text-xs uppercase tracking-wider text-muted sm:pt-0">
                       {league.role}
                     </span>
                   </Link>

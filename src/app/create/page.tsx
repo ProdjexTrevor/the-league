@@ -77,7 +77,7 @@ export default async function CreatePage({ searchParams }: Props) {
   const cancelHref = lockedLeagueId ? `/leagues/${lockedLeagueId}` : "/app";
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-3xl px-6 py-10">
+    <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
       <Link href={cancelHref} className="font-display text-2xl text-fg">
         THE LEAGUE
       </Link>

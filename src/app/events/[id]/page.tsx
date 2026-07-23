@@ -90,7 +90,7 @@ export default async function EventPage({ params }: Props) {
   }
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-3xl px-6 py-10 pb-20">
+    <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-8 pb-20 sm:px-6 sm:py-10">
       <Link
         href={event.league_id ? `/leagues/${event.league_id}` : "/app"}
         className="text-sm text-muted hover:text-fg"
@@ -102,13 +102,17 @@ export default async function EventPage({ params }: Props) {
         <p className="text-sm uppercase tracking-wider text-muted">
           {event.kind} · {catalog?.name ?? "Game"} · {event.status}
         </p>
-        <h1 className="mt-2 font-display text-5xl text-fg">{event.title}</h1>
+        <h1 className="mt-2 font-display break-words text-4xl text-fg sm:text-5xl">
+          {event.title}
+        </h1>
         <p className="mt-3 text-sm text-muted">
           {scoringModeLabel(scoringMode)} · entry {event.entry_fee_units} · wager{" "}
           {event.wager_mode}
           {event.wager_mode !== "none" && ` · stake ${event.default_stake_units}`}
         </p>
-        {event.notes && <p className="mt-2 text-sm text-muted">{event.notes}</p>}
+        {event.notes && (
+          <p className="mt-2 break-words text-sm text-muted">{event.notes}</p>
+        )}
         {event.kind === "tournament" && (
           <p className="mt-2 text-sm text-muted">
             Format: {event.format ?? "custom"}
@@ -123,13 +127,13 @@ export default async function EventPage({ params }: Props) {
           {players?.map((p) => (
             <li
               key={p.user_id}
-              className="flex items-center justify-between py-3 text-sm"
+              className="flex flex-col gap-1 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3"
             >
-              <span>
+              <span className="min-w-0 break-words">
                 {nameById.get(p.user_id)}
                 {p.side_label ? ` (${p.side_label})` : ""}
               </span>
-              <span className="text-muted">
+              <span className="shrink-0 text-muted">
                 {event.status === "completed"
                   ? [
                       p.placement ? `#${p.placement}` : null,
@@ -149,12 +153,12 @@ export default async function EventPage({ params }: Props) {
       {event.status !== "completed" && available.length > 0 && (
         <section className="mt-10">
           <h2 className="text-lg font-semibold">Add player</h2>
-          <form action={addPlayerAction} className="mt-3 flex flex-wrap gap-3">
+          <form action={addPlayerAction} className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <select
               name="user_id"
               required
               defaultValue=""
-              className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
+              className="w-full min-w-0 rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:w-auto sm:min-w-[12rem]"
             >
               <option value="" disabled>
                 Select member
@@ -173,11 +177,11 @@ export default async function EventPage({ params }: Props) {
             <input
               name="side_label"
               placeholder="Side label (optional)"
-              className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
+              className="w-full min-w-0 rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:w-auto sm:min-w-[12rem]"
             />
             <button
               type="submit"
-              className="rounded-sm border border-line px-4 py-2.5 text-sm hover:border-fg/40"
+              className="rounded-sm border border-line px-4 py-2.5 text-sm hover:border-fg/40 sm:w-auto"
             >
               Add
             </button>
@@ -203,9 +207,9 @@ export default async function EventPage({ params }: Props) {
             {lines?.map((line) => (
               <li
                 key={line.id}
-                className="flex items-center justify-between gap-3 py-3 text-sm"
+                className="flex flex-col gap-2 py-3 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3"
               >
-                <span>
+                <span className="min-w-0 break-words">
                   {line.player_id
                     ? nameById.get(line.player_id) ?? line.player_id
                     : line.side_label}{" "}
@@ -226,7 +230,7 @@ export default async function EventPage({ params }: Props) {
                   )}
                 </span>
                 {event.status !== "completed" && (
-                  <form action={deleteLineAction}>
+                  <form action={deleteLineAction} className="shrink-0">
                     <input type="hidden" name="line_id" value={line.id} />
                     <button type="submit" className="text-xs text-muted hover:text-danger">
                       Remove

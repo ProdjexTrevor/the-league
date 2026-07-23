@@ -57,7 +57,7 @@ export default async function GamePage({ params }: Props) {
   }
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-3xl px-6 py-10">
+    <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
       <Link
         href={`/leagues/${leagueId}`}
         className="text-sm text-muted hover:text-fg"
@@ -69,7 +69,9 @@ export default async function GamePage({ params }: Props) {
         <p className="text-sm uppercase tracking-wider text-muted">
           {gameType?.name ?? "Game"} · {game.status}
         </p>
-        <h1 className="mt-2 font-display text-5xl text-fg">{game.title}</h1>
+        <h1 className="mt-2 font-display break-words text-4xl text-fg sm:text-5xl">
+          {game.title}
+        </h1>
         <p className="mt-3 text-sm text-muted">
           Wager: <span className="text-accent">{game.wager_units}</span> units
           each
@@ -104,11 +106,11 @@ export default async function GamePage({ params }: Props) {
           {available.length > 0 && (
             <section className="mt-10">
               <h2 className="text-lg font-semibold">Add player</h2>
-              <form action={addPlayerAction} className="mt-3 flex flex-wrap gap-3">
+              <form action={addPlayerAction} className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <select
                   name="user_id"
                   required
-                  className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
+                  className="w-full min-w-0 rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:w-auto sm:min-w-[12rem]"
                   defaultValue=""
                 >
                   <option value="" disabled>
@@ -127,7 +129,7 @@ export default async function GamePage({ params }: Props) {
                 </select>
                 <button
                   type="submit"
-                  className="rounded-sm border border-line px-4 py-2.5 text-sm hover:border-fg/40"
+                  className="rounded-sm border border-line px-4 py-2.5 text-sm hover:border-fg/40 sm:w-auto"
                 >
                   Add
                 </button>
@@ -149,16 +151,18 @@ export default async function GamePage({ params }: Props) {
                   return (
                     <label
                       key={p.user_id}
-                      className="flex items-center justify-between gap-4 text-sm"
+                      className="flex items-center justify-between gap-3 text-sm sm:gap-4"
                     >
-                      <span>{profile?.display_name ?? "Player"}</span>
+                      <span className="min-w-0 break-words">
+                        {profile?.display_name ?? "Player"}
+                      </span>
                       <input
                         name={`placement_${p.user_id}`}
                         type="number"
                         min={1}
                         required
                         placeholder="#"
-                        className="w-20 rounded-sm border border-line bg-bg-elevated px-3 py-2 text-sm outline-none focus:border-accent"
+                        className="w-20 shrink-0 rounded-sm border border-line bg-bg-elevated px-3 py-2 text-base outline-none focus:border-accent sm:text-sm"
                       />
                     </label>
                   );

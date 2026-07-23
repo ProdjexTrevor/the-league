@@ -77,17 +77,17 @@ export default async function WalletPage() {
   const totalDue = (dueRows ?? []).reduce((s, r) => s + Number(r.amount), 0);
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-3xl px-6 py-10 pb-20">
+    <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-8 pb-20 sm:px-6 sm:py-10">
       <div className="flex items-center justify-between gap-4">
         <Link href="/app" className="font-display text-2xl text-fg">
           THE LEAGUE
         </Link>
-        <Link href="/app" className="text-sm text-muted hover:text-fg">
+        <Link href="/app" className="shrink-0 text-sm text-muted hover:text-fg">
           Dashboard
         </Link>
       </div>
 
-      <h1 className="mt-10 font-display text-5xl text-fg">Wallet</h1>
+      <h1 className="mt-10 font-display text-4xl text-fg sm:text-5xl">Wallet</h1>
       <p className="mt-3 text-sm text-muted">
         Track what you owe after settled games. Pay opens Venmo with their
         username filled in.
@@ -110,8 +110,8 @@ export default async function WalletPage() {
 
       <section className="mt-12">
         <h2 className="text-lg font-semibold">Your Venmo</h2>
-        <form action={updateVenmoUsername} className="mt-4 flex flex-wrap gap-3">
-          <div className="relative min-w-[200px] flex-1">
+        <form action={updateVenmoUsername} className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <div className="relative min-w-0 flex-1">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">
               @
             </span>
@@ -125,7 +125,7 @@ export default async function WalletPage() {
           </div>
           <button
             type="submit"
-            className="rounded-sm border border-line px-4 py-2.5 text-sm hover:border-fg/40"
+            className="rounded-sm border border-line px-4 py-2.5 text-sm hover:border-fg/40 sm:w-auto"
           >
             Save
           </button>
@@ -216,17 +216,17 @@ export default async function WalletPage() {
               return (
                 <li
                   key={row.id}
-                  className="flex items-center justify-between gap-4 py-3 text-sm"
+                  className="flex items-start justify-between gap-3 py-3 text-sm sm:items-center sm:gap-4"
                 >
-                  <div>
-                    <p className="font-medium">
+                  <div className="min-w-0">
+                    <p className="break-words font-medium">
                       {person?.display_name ?? "Player"}
                     </p>
-                    <p className="text-muted">
+                    <p className="break-words text-muted">
                       {event?.title ?? "Event"} · ${Number(row.amount).toFixed(2)}
                     </p>
                   </div>
-                  <span className="text-accent">Due</span>
+                  <span className="shrink-0 text-accent">Due</span>
                 </li>
               );
             })}

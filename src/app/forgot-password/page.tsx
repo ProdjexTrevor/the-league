@@ -32,7 +32,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-6 py-16">
+    <main className="flex min-h-screen flex-col items-center justify-center px-4 py-12 sm:px-6 sm:py-16">
       <div className="w-full max-w-md">
         <Link href="/" className="font-display text-3xl text-fg">
           THE LEAGUE

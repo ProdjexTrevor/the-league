@@ -49,23 +49,25 @@ export default async function LeaguePage({ params }: Props) {
   );
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-3xl px-6 py-10 pb-20">
+    <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-8 pb-20 sm:px-6 sm:py-10">
       <Link href="/app" className="text-sm text-muted hover:text-fg">
         ← All leagues
       </Link>
 
       <header className="mt-6">
-        <h1 className="font-display text-5xl text-fg md:text-6xl">{league.name}</h1>
+        <h1 className="font-display break-words text-4xl text-fg sm:text-5xl md:text-6xl">
+          {league.name}
+        </h1>
         {league.description && (
-          <p className="mt-2 text-muted">{league.description}</p>
+          <p className="mt-2 break-words text-muted">{league.description}</p>
         )}
-        <p className="mt-4 text-sm text-muted">
-          Invite code{" "}
+        <p className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-2 text-sm text-muted">
+          <span>Invite code</span>
           <span className="rounded-sm bg-bg-elevated px-2 py-1 font-mono tracking-widest text-accent">
             {league.invite_code}
           </span>
           {Number(league.default_entry_fee_units) > 0 && (
-            <> · season entry {league.default_entry_fee_units}</>
+            <span>· season entry {league.default_entry_fee_units}</span>
           )}
         </p>
         <div className="mt-6">
@@ -84,23 +86,23 @@ export default async function LeaguePage({ params }: Props) {
           <p className="mt-3 text-sm text-muted">No completed events yet.</p>
         ) : (
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full min-w-[20rem] text-left text-sm">
               <thead className="border-b border-line text-muted">
                 <tr>
-                  <th className="py-2 font-medium">Player</th>
-                  <th className="py-2 font-medium">Played</th>
-                  <th className="py-2 font-medium">Wins</th>
+                  <th className="py-2 pr-3 font-medium">Player</th>
+                  <th className="py-2 pr-3 font-medium">Played</th>
+                  <th className="py-2 pr-3 font-medium">Wins</th>
                   <th className="py-2 font-medium">Net units</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {standings.map((row) => (
                   <tr key={row.user_id}>
-                    <td className="py-2.5">
+                    <td className="max-w-[10rem] truncate py-2.5 pr-3 sm:max-w-none sm:whitespace-normal">
                       {nameById.get(row.user_id ?? "") ?? "Player"}
                     </td>
-                    <td className="py-2.5">{row.games_played ?? 0}</td>
-                    <td className="py-2.5">{row.wins ?? 0}</td>
+                    <td className="py-2.5 pr-3">{row.games_played ?? 0}</td>
+                    <td className="py-2.5 pr-3">{row.wins ?? 0}</td>
                     <td className="py-2.5 font-medium text-accent">
                       {Number(row.net_units ?? 0).toFixed(0)}
                     </td>
@@ -142,16 +144,16 @@ export default async function LeaguePage({ params }: Props) {
               <li key={event.id}>
                 <Link
                   href={`/events/${event.id}`}
-                  className="flex items-center justify-between gap-4 py-4 transition hover:bg-fg/[0.03]"
+                  className="flex items-start justify-between gap-3 py-4 transition hover:bg-fg/[0.03] sm:items-center sm:gap-4"
                 >
-                  <div>
-                    <p className="font-medium">{event.title}</p>
+                  <div className="min-w-0">
+                    <p className="break-words font-medium">{event.title}</p>
                     <p className="mt-0.5 text-sm text-muted">
                       {event.kind} · {event.wager_mode} · entry{" "}
                       {event.entry_fee_units}
                     </p>
                   </div>
-                  <span className="text-xs uppercase tracking-wider text-muted">
+                  <span className="shrink-0 pt-0.5 text-xs uppercase tracking-wider text-muted sm:pt-0">
                     {event.status}
                   </span>
                 </Link>

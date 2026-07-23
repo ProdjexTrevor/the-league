@@ -24,11 +24,13 @@ export default async function CatalogPage() {
   const customGames = games?.filter((g) => g.is_system === false) ?? [];
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-3xl px-6 py-10 pb-20">
+    <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-8 pb-20 sm:px-6 sm:py-10">
       <Link href="/app" className="text-sm text-muted hover:text-fg">
         ← Dashboard
       </Link>
-      <h1 className="mt-6 font-display text-5xl text-fg">Game catalog</h1>
+      <h1 className="mt-6 font-display text-4xl text-fg sm:text-5xl">
+        Game catalog
+      </h1>
       <p className="mt-3 text-sm text-muted">
         Yard, BBQ, and card games for wagers — or define your own.
       </p>
