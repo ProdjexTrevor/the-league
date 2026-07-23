@@ -68,18 +68,12 @@ export default async function LeaguePage({ params }: Props) {
             <> · season entry {league.default_entry_fee_units}</>
           )}
         </p>
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-6">
           <Link
             href={`/create?league=${id}&kind=game`}
-            className="rounded-sm bg-accent px-4 py-2.5 text-sm font-semibold text-accent-ink hover:brightness-110"
+            className="inline-flex rounded-sm bg-accent px-4 py-2.5 text-sm font-semibold text-accent-ink hover:brightness-110"
           >
             Start a game
-          </Link>
-          <Link
-            href={`/create?league=${id}&kind=tournament`}
-            className="rounded-sm border border-line px-4 py-2.5 text-sm hover:border-fg/40"
-          >
-            Start a tournament
           </Link>
         </div>
       </header>

@@ -71,7 +71,7 @@ export default async function CreatePage({ searchParams }: Props) {
     params.kind === "game" ||
     params.kind === "tournament" ||
     params.kind === "league"
-      ? params.kind
+      ? (params.kind as "game" | "tournament" | "league")
       : undefined;
 
   const cancelHref = lockedLeagueId ? `/leagues/${lockedLeagueId}` : "/app";

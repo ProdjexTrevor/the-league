@@ -95,7 +95,7 @@ export default async function AppPage() {
           href="/create"
           className="inline-flex rounded-sm bg-accent px-5 py-3 text-sm font-semibold text-accent-ink transition hover:brightness-110"
         >
-          Create or join
+          Start something
         </Link>
       </div>
 

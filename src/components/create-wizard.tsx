@@ -29,7 +29,8 @@ export type UserOption = {
   display_name: string;
 };
 
-type Intent = "league" | "game" | "tournament" | "join" | null;
+type Intent = "match" | "league" | "join" | null;
+type MatchKind = "game" | "tournament";
 
 type Props = {
   catalog: CatalogOption[];
@@ -39,7 +40,7 @@ type Props = {
   leagueMemberIds: Record<string, string[]>;
   currentUserId: string;
   lockedLeagueId?: string;
-  initialIntent?: Exclude<Intent, "join" | null>;
+  initialIntent?: "game" | "tournament" | "league";
   onCancelHref?: string;
 };
 
@@ -65,8 +66,15 @@ export function CreateWizard({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const [intent, setIntent] = useState<Intent>(initialIntent ?? null);
+  const startsAsMatch =
+    initialIntent === "game" || initialIntent === "tournament";
+  const [intent, setIntent] = useState<Intent>(
+    startsAsMatch ? "match" : (initialIntent ?? null)
+  );
   const [step, setStep] = useState(initialIntent ? 1 : 0);
+  const [matchKind, setMatchKind] = useState<MatchKind>(
+    initialIntent === "tournament" ? "tournament" : "game"
+  );
 
   const [leagueName, setLeagueName] = useState("");
   const [leagueDescription, setLeagueDescription] = useState("");
@@ -92,6 +100,8 @@ export function CreateWizard({
   const [format, setFormat] = useState("single_elim");
   const [bracketSize, setBracketSize] = useState("");
   const [notes, setNotes] = useState("");
+  const [showExtras, setShowExtras] = useState(false);
+  const [showOdds, setShowOdds] = useState(false);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([
     currentUserId,
   ]);
@@ -122,18 +132,16 @@ export function CreateWizard({
   }, [availablePlayers, playerSearch]);
 
   const steps = useMemo(() => {
-    if (!intent) return ["What are you creating?"];
-    if (intent === "join") return ["What are you creating?", "Invite code"];
+    if (!intent) return ["What do you want to do?"];
+    if (intent === "join") return ["What do you want to do?", "Invite code"];
     if (intent === "league") {
-      return ["What are you creating?", "League details", "Entry fee", "Review"];
+      return ["What do you want to do?", "League details", "Review"];
     }
     return [
-      "What are you creating?",
-      "Pick a game",
-      "Details",
+      "What do you want to do?",
+      "Pick the game",
       "Who's playing",
-      "Wager & fees",
-      "Review",
+      "Stake",
     ];
   }, [intent]);
 
@@ -145,13 +153,11 @@ export function CreateWizard({
       const next = prev.includes(id)
         ? prev.filter((x) => x !== id)
         : [...prev, id];
-      // Keep team assignments in sync when roster changes
       setPlayerTeam((teams) => {
         const kept: Record<string, "1" | "2"> = {};
         for (const pid of next) {
           if (teams[pid]) kept[pid] = teams[pid];
         }
-        // Auto-assign new players alternating if using teams
         for (const pid of next) {
           if (!kept[pid]) {
             const t1 = Object.values(kept).filter((t) => t === "1").length;
@@ -192,61 +198,58 @@ export function CreateWizard({
     });
   }
 
+  function validateOdds(): string | null {
+    if (wagerMode !== "odds") return null;
+    const stakeNum = Number(stake);
+    if (!(stakeNum > 0)) {
+      return "Enter a stake greater than 0 for odds wagers.";
+    }
+    if (oddsScope === "team") {
+      const missing = selectedPlayerIds.filter((id) => !playerTeam[id]);
+      if (missing.length) return "Assign every player to a team.";
+      const t1 = Number(team1Odds.num);
+      const t1d = Number(team1Odds.den);
+      const t2 = Number(team2Odds.num);
+      const t2d = Number(team2Odds.den);
+      const hasT1 = t1 > 0 && t1d > 0;
+      const hasT2 = t2 > 0 && t2d > 0;
+      if (!hasT1 && !hasT2) {
+        return "Set odds for at least one team (e.g. 2 / 1).";
+      }
+    } else {
+      const anyLine = selectedPlayerIds.some((id) => {
+        const o = playerOdds[id];
+        return o && Number(o.num) > 0 && Number(o.den) > 0;
+      });
+      if (!anyLine) return "Set odds for at least one player (e.g. 2 / 1).";
+    }
+    return null;
+  }
+
   function goNext() {
     setError(null);
     if (step === 0 && !intent) {
-      setError("Pick what you want to create.");
+      setError("Pick what you want to do.");
       return;
     }
     if (intent === "league" && step === 1 && !leagueName.trim()) {
       setError("Give your league a name.");
       return;
     }
-    if (intent === "game" || intent === "tournament") {
-      if (step === 1 && !catalogId) {
-        setError("Pick a game from the catalog.");
-        return;
-      }
-      if (step === 2 && !title.trim()) {
-        setError("Add a title.");
-        return;
-      }
-      if (step === 3 && selectedPlayerIds.length < 2) {
-        setError("Select at least two players from the list.");
-        return;
-      }
-      if (step === 4 && wagerMode === "odds") {
-        const stakeNum = Number(stake);
-        if (!(stakeNum > 0)) {
-          setError("Enter a stake greater than 0 for odds wagers.");
+    if (intent === "match") {
+      if (step === 1) {
+        if (!catalogId) {
+          setError("Pick a game.");
           return;
         }
-        if (oddsScope === "team") {
-          const missing = selectedPlayerIds.filter((id) => !playerTeam[id]);
-          if (missing.length) {
-            setError("Assign every player to a team.");
-            return;
-          }
-          const t1 = Number(team1Odds.num);
-          const t1d = Number(team1Odds.den);
-          const t2 = Number(team2Odds.num);
-          const t2d = Number(team2Odds.den);
-          const hasT1 = t1 > 0 && t1d > 0;
-          const hasT2 = t2 > 0 && t2d > 0;
-          if (!hasT1 && !hasT2) {
-            setError("Set odds for at least one team (e.g. 2 / 1).");
-            return;
-          }
-        } else {
-          const anyLine = selectedPlayerIds.some((id) => {
-            const o = playerOdds[id];
-            return o && Number(o.num) > 0 && Number(o.den) > 0;
-          });
-          if (!anyLine) {
-            setError("Set odds for at least one player (e.g. 2 / 1).");
-            return;
-          }
+        if (!title.trim()) {
+          setError("Add a title.");
+          return;
         }
+      }
+      if (step === 2 && selectedPlayerIds.length < 2) {
+        setError("Select at least two players.");
+        return;
       }
     }
     if (intent === "join" && step === 1 && !inviteCode.trim()) {
@@ -282,12 +285,17 @@ export function CreateWizard({
           await joinLeague(fd);
           return;
         }
-        if (intent === "game" || intent === "tournament") {
+        if (intent === "match") {
           if (selectedPlayerIds.length < 2) {
             setError("Select at least two players.");
             return;
           }
-          fd.set("kind", intent);
+          const oddsError = validateOdds();
+          if (oddsError) {
+            setError(oddsError);
+            return;
+          }
+          fd.set("kind", matchKind);
           fd.set("title", title.trim());
           fd.set("catalog_id", catalogId);
           if (leagueId) fd.set("league_id", leagueId);
@@ -295,7 +303,7 @@ export function CreateWizard({
           fd.set("wager_mode", wagerMode);
           fd.set("stake", stake || "0");
           fd.set("notes", notes.trim());
-          if (intent === "tournament") {
+          if (matchKind === "tournament") {
             fd.set("format", format);
             if (bracketSize) fd.set("bracket_size", bracketSize);
           }
@@ -332,12 +340,18 @@ export function CreateWizard({
 
   const isLast =
     (intent === "join" && step === 1) ||
-    (intent === "league" && step === 3) ||
-    ((intent === "game" || intent === "tournament") && step === 5);
+    (intent === "league" && step === 2) ||
+    (intent === "match" && step === 3);
 
   const playerNames = selectedPlayerIds
     .map((id) => users.find((u) => u.id === id)?.display_name ?? "Player")
     .join(", ");
+
+  const leagueLabel = lockedLeagueId
+    ? (leagues.find((l) => l.id === lockedLeagueId)?.name ?? "This league")
+    : leagueId
+      ? (leagues.find((l) => l.id === leagueId)?.name ?? leagueId)
+      : "Standalone";
 
   return (
     <div className="mx-auto w-full max-w-lg">
@@ -365,9 +379,12 @@ export function CreateWizard({
           <div className="space-y-3 animate-rise">
             {(
               [
-                ["game", "Game", "One match — pick players when it starts"],
-                ["tournament", "Tournament", "Bracket or round robin"],
-                ["league", "League", "Friend group with invite code"],
+                [
+                  "match",
+                  "Start a game",
+                  "Pick a game, players, and an optional stake",
+                ],
+                ["league", "Create a league", "Friend group with an invite code"],
                 ["join", "Join a league", "Enter an invite code"],
               ] as const
             )
@@ -430,11 +447,6 @@ export function CreateWizard({
                 className={inputClass}
               />
             </label>
-          </div>
-        )}
-
-        {intent === "league" && step === 2 && (
-          <div className="animate-rise space-y-4">
             <label className="block">
               <span className={labelClass}>Season entry fee (units)</span>
               <input
@@ -448,7 +460,7 @@ export function CreateWizard({
           </div>
         )}
 
-        {intent === "league" && step === 3 && (
+        {intent === "league" && step === 2 && (
           <Review
             rows={[
               ["Type", "League"],
@@ -459,109 +471,149 @@ export function CreateWizard({
           />
         )}
 
-        {(intent === "game" || intent === "tournament") && step === 1 && (
-          <div className="animate-rise max-h-[360px] space-y-2 overflow-y-auto pr-1">
-            {catalog.length === 0 ? (
-              <p className="text-sm text-danger">
-                Catalog is empty. Run the competitions SQL migration first.
-              </p>
-            ) : (
-              catalog.map((g) => (
-                <button
-                  key={g.id}
-                  type="button"
-                  onClick={() => {
-                    setCatalogId(g.id);
-                    if (!title) setTitle(g.name);
-                  }}
-                  className={catalogId === g.id ? choiceActive : choiceClass}
-                >
-                  <p className="font-medium">{g.name}</p>
-                  <p className="mt-1 text-sm text-muted">
-                    {scoringModeLabel(g.scoring_mode as ScoringMode)}
-                    {g.description ? ` · ${g.description}` : ""}
-                  </p>
-                </button>
-              ))
-            )}
-          </div>
-        )}
-
-        {(intent === "game" || intent === "tournament") && step === 2 && (
-          <div className="animate-rise space-y-4">
-            <label className="block">
-              <span className={labelClass}>Title</span>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className={inputClass}
-                autoFocus
-              />
-            </label>
-            {!lockedLeagueId && (
-              <label className="block">
-                <span className={labelClass}>League (optional)</span>
-                <select
-                  value={leagueId}
-                  onChange={(e) => {
-                    setLeagueId(e.target.value);
-                    // reset selection to current user when league changes
-                    setSelectedPlayerIds([currentUserId]);
-                  }}
-                  className={inputClass}
-                >
-                  <option value="">Standalone</option>
-                  {leagues.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            {intent === "tournament" && (
-              <>
-                <label className="block">
-                  <span className={labelClass}>Format</span>
-                  <select
-                    value={format}
-                    onChange={(e) => setFormat(e.target.value)}
-                    className={inputClass}
+        {intent === "match" && step === 1 && (
+          <div className="animate-rise space-y-5">
+            <div className="max-h-[240px] space-y-2 overflow-y-auto pr-1">
+              {catalog.length === 0 ? (
+                <p className="text-sm text-danger">
+                  Catalog is empty. Run the competitions SQL migration first.
+                </p>
+              ) : (
+                catalog.map((g) => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => {
+                      setCatalogId(g.id);
+                      setTitle((t) => t || g.name);
+                    }}
+                    className={catalogId === g.id ? choiceActive : choiceClass}
                   >
-                    <option value="single_elim">Single elimination</option>
-                    <option value="round_robin">Round robin</option>
-                    <option value="custom">Custom</option>
-                  </select>
-                </label>
+                    <p className="font-medium">{g.name}</p>
+                    <p className="mt-1 text-sm text-muted">
+                      {scoringModeLabel(g.scoring_mode as ScoringMode)}
+                      {g.description ? ` · ${g.description}` : ""}
+                    </p>
+                  </button>
+                ))
+              )}
+            </div>
+
+            {catalogId && (
+              <div className="space-y-4 border-t border-line pt-4">
                 <label className="block">
-                  <span className={labelClass}>Bracket size (optional)</span>
+                  <span className={labelClass}>Title</span>
                   <input
-                    type="number"
-                    min={2}
-                    value={bracketSize}
-                    onChange={(e) => setBracketSize(e.target.value)}
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
                     className={inputClass}
+                    autoFocus
                   />
                 </label>
-              </>
+
+                {!lockedLeagueId && leagues.length > 0 && (
+                  <label className="block">
+                    <span className={labelClass}>League (optional)</span>
+                    <select
+                      value={leagueId}
+                      onChange={(e) => {
+                        setLeagueId(e.target.value);
+                        setSelectedPlayerIds([currentUserId]);
+                      }}
+                      className={inputClass}
+                    >
+                      <option value="">Standalone</option>
+                      {leagues.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                <div className="flex items-center justify-between gap-3 rounded-sm border border-line px-4 py-3">
+                  <div>
+                    <p className="font-medium text-fg">Tournament</p>
+                    <p className="mt-0.5 text-sm text-muted">
+                      Bracket or round robin instead of a single match
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={matchKind === "tournament"}
+                    onClick={() =>
+                      setMatchKind((k) =>
+                        k === "tournament" ? "game" : "tournament"
+                      )
+                    }
+                    className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+                      matchKind === "tournament" ? "bg-accent" : "bg-line"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-bg-elevated transition ${
+                        matchKind === "tournament" ? "translate-x-5" : ""
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {matchKind === "tournament" && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block">
+                      <span className={labelClass}>Format</span>
+                      <select
+                        value={format}
+                        onChange={(e) => setFormat(e.target.value)}
+                        className={inputClass}
+                      >
+                        <option value="single_elim">Single elimination</option>
+                        <option value="round_robin">Round robin</option>
+                        <option value="custom">Custom</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className={labelClass}>Bracket size (optional)</span>
+                      <input
+                        type="number"
+                        min={2}
+                        value={bracketSize}
+                        onChange={(e) => setBracketSize(e.target.value)}
+                        className={inputClass}
+                      />
+                    </label>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setShowExtras((v) => !v)}
+                  className="text-sm text-muted underline-offset-2 hover:text-fg hover:underline"
+                >
+                  {showExtras ? "Hide notes" : "Add notes (optional)"}
+                </button>
+                {showExtras && (
+                  <label className="block">
+                    <span className={labelClass}>Notes</span>
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={2}
+                      className={inputClass}
+                    />
+                  </label>
+                )}
+              </div>
             )}
-            <label className="block">
-              <span className={labelClass}>Notes (optional)</span>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                className={inputClass}
-              />
-            </label>
           </div>
         )}
 
-        {(intent === "game" || intent === "tournament") && step === 3 && (
+        {intent === "match" && step === 2 && (
           <div className="animate-rise space-y-4">
             <p className="text-sm text-muted">
-              Select everyone in this {intent} from the user list. You are
-              always included.
+              Tap everyone in this {matchKind}. You are always included.
             </p>
             <input
               value={playerSearch}
@@ -618,57 +670,33 @@ export function CreateWizard({
           </div>
         )}
 
-        {(intent === "game" || intent === "tournament") && step === 4 && (
-          <div className="animate-rise space-y-4">
-            <label className="block">
-              <span className={labelClass}>Entry fee (units)</span>
-              <input
-                type="number"
-                min={0}
-                value={entryFee}
-                onChange={(e) => setEntryFee(e.target.value)}
-                className={inputClass}
-              />
-            </label>
-            <fieldset>
-              <legend className={labelClass}>Wager mode</legend>
-              <div className="space-y-2">
-                {(
-                  [
-                    ["none", "No wager", "Just track results"],
-                    ["pot", "Equal pot", "Everyone posts the same stake"],
-                    [
-                      "odds",
-                      "Odds",
-                      "You set lines per player or team (e.g. 2 to 1)",
-                    ],
-                  ] as const
-                ).map(([value, label, desc]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => {
-                      setWagerMode(value);
-                      if (value === "odds") {
-                        ensurePlayerOdds(selectedPlayerIds);
-                        ensureTeamAssignments(selectedPlayerIds);
-                      }
-                    }}
-                    className={wagerMode === value ? choiceActive : choiceClass}
-                  >
-                    <p className="font-medium">{label}</p>
-                    <p className="mt-1 text-sm text-muted">{desc}</p>
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            {wagerMode !== "none" && (
+        {intent === "match" && step === 3 && (
+          <div className="animate-rise space-y-5">
+            <div className="space-y-2">
+              {(
+                [
+                  ["pot", "Equal pot", `Everyone puts in ${stake || "10"} units`],
+                  ["none", "No wager", "Just track who won"],
+                ] as const
+              ).map(([value, label, desc]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => {
+                    setWagerMode(value);
+                    setShowOdds(false);
+                  }}
+                  className={wagerMode === value ? choiceActive : choiceClass}
+                >
+                  <p className="font-medium">{label}</p>
+                  <p className="mt-1 text-sm text-muted">{desc}</p>
+                </button>
+              ))}
+            </div>
+
+            {wagerMode === "pot" && (
               <label className="block">
-                <span className={labelClass}>
-                  {wagerMode === "odds"
-                    ? "Stake per line (units)"
-                    : "Stake / pot units"}
-                </span>
+                <span className={labelClass}>Stake per player (units)</span>
                 <input
                   type="number"
                   min={0}
@@ -678,8 +706,41 @@ export function CreateWizard({
                 />
               </label>
             )}
-            {wagerMode === "odds" && (
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowOdds((v) => {
+                  const next = !v;
+                  if (next) {
+                    setWagerMode("odds");
+                    ensurePlayerOdds(selectedPlayerIds);
+                    ensureTeamAssignments(selectedPlayerIds);
+                  } else if (wagerMode === "odds") {
+                    setWagerMode("pot");
+                  }
+                  return next;
+                });
+              }}
+              className="text-sm text-muted underline-offset-2 hover:text-fg hover:underline"
+            >
+              {showOdds || wagerMode === "odds"
+                ? "Hide odds options"
+                : "Set custom odds instead"}
+            </button>
+
+            {(showOdds || wagerMode === "odds") && (
               <div className="space-y-4 border-t border-line pt-4">
+                <label className="block">
+                  <span className={labelClass}>Stake per line (units)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={stake}
+                    onChange={(e) => setStake(e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
                 <fieldset>
                   <legend className={labelClass}>Odds for</legend>
                   <div className="grid grid-cols-2 gap-2">
@@ -712,12 +773,8 @@ export function CreateWizard({
                 <p className="text-sm text-muted">
                   Example: {formatOdds(2, 1)} on {stake || "10"} means the other
                   side puts up{" "}
-                  {liability(
-                    Number(stake) || 10,
-                    2,
-                    1
-                  ).toFixed(0)}{" "}
-                  if that line wins.
+                  {liability(Number(stake) || 10, 2, 1).toFixed(0)} if that line
+                  wins.
                 </p>
 
                 {oddsScope === "player" ? (
@@ -921,71 +978,42 @@ export function CreateWizard({
                 )}
               </div>
             )}
-          </div>
-        )}
 
-        {(intent === "game" || intent === "tournament") && step === 5 && (
-          <Review
-            rows={[
-              ["Type", intent === "tournament" ? "Tournament" : "Game"],
-              ["Game", selectedGame?.name ?? "—"],
-              ["Title", title],
-              [
-                "League",
-                lockedLeagueId
-                  ? (leagues.find((l) => l.id === lockedLeagueId)?.name ??
-                    "This league")
-                  : leagueId
-                    ? (leagues.find((l) => l.id === leagueId)?.name ?? leagueId)
-                    : "Standalone",
-              ],
-              ["Players", playerNames],
-              ["Entry fee", `${entryFee || 0} units`],
-              [
-                "Wager",
-                wagerMode === "odds"
-                  ? `odds · ${oddsScope === "team" ? "teams" : "per player"}`
-                  : wagerMode,
-              ],
-              ...(wagerMode !== "none"
-                ? [["Stake", `${stake || 0} units`] as [string, string]]
-                : []),
-              ...(wagerMode === "odds" && oddsScope === "team"
-                ? ([
-                    [
-                      team1Name || "Team 1",
-                      Number(team1Odds.num) > 0
-                        ? formatOdds(
-                            Number(team1Odds.num),
-                            Number(team1Odds.den) || 1
-                          )
-                        : "—",
-                    ],
-                    [
-                      team2Name || "Team 2",
-                      Number(team2Odds.num) > 0
-                        ? formatOdds(
-                            Number(team2Odds.num),
-                            Number(team2Odds.den) || 1
-                          )
-                        : "—",
-                    ],
-                  ] as [string, string][])
-                : []),
-              ...(wagerMode === "odds" && oddsScope === "player"
-                ? (selectedPlayerIds.map((id) => {
-                    const name =
-                      users.find((u) => u.id === id)?.display_name ?? "Player";
-                    const o = playerOdds[id];
-                    const line =
-                      o && Number(o.num) > 0
-                        ? formatOdds(Number(o.num), Number(o.den) || 1)
-                        : "—";
-                    return [name, line] as [string, string];
-                  }) as [string, string][])
-                : []),
-            ]}
-          />
+            <label className="block">
+              <span className={labelClass}>Entry fee (optional, units)</span>
+              <input
+                type="number"
+                min={0}
+                value={entryFee}
+                onChange={(e) => setEntryFee(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+
+            <Review
+              rows={[
+                [
+                  "Type",
+                  matchKind === "tournament" ? "Tournament" : "Game",
+                ],
+                ["Game", selectedGame?.name ?? "—"],
+                ["Title", title],
+                ["League", leagueLabel],
+                ["Players", playerNames],
+                [
+                  "Wager",
+                  wagerMode === "odds"
+                    ? `odds · ${oddsScope === "team" ? "teams" : "per player"}`
+                    : wagerMode === "pot"
+                      ? `equal pot · ${stake || 0}`
+                      : "none",
+                ],
+                ...(Number(entryFee) > 0
+                  ? [["Entry fee", `${entryFee} units`] as [string, string]]
+                  : []),
+              ]}
+            />
+          </div>
         )}
       </div>
 
@@ -1022,7 +1050,9 @@ export function CreateWizard({
                 ? "Join league"
                 : intent === "league"
                   ? "Create league"
-                  : `Start ${intent}`}
+                  : matchKind === "tournament"
+                    ? "Start tournament"
+                    : "Start game"}
           </button>
         )}
       </div>
