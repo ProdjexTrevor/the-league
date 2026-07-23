@@ -319,7 +319,10 @@ export type Database = {
           user_id: string | null;
           games_played: number | null;
           wins: number | null;
+          losses: number | null;
           net_units: number | null;
+          money_won: number | null;
+          money_lost: number | null;
         };
         Relationships: [];
       };

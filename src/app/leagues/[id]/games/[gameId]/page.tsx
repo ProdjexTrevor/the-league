@@ -73,7 +73,7 @@ export default async function GamePage({ params }: Props) {
           {game.title}
         </h1>
         <p className="mt-3 text-sm text-muted">
-          Wager: <span className="text-accent">{game.wager_units}</span> units
+          Wager: <span className="text-accent">{game.wager_units}</span> money
           each
         </p>
         {game.notes && <p className="mt-2 text-sm text-muted">{game.notes}</p>}

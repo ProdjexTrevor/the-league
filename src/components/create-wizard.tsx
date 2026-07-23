@@ -5,11 +5,9 @@ import { useRouter } from "next/navigation";
 
 import { createEvent, createLeague, joinLeague } from "@/app/actions";
 import {
-  formatOdds,
-  liability,
   scoringModeLabel,
-  type OddsScope,
   type ScoringMode,
+  type WagerScope,
 } from "@/lib/wager";
 
 export type CatalogOption = {
@@ -84,24 +82,22 @@ export function CreateWizard({
   const [title, setTitle] = useState("");
   const [leagueId, setLeagueId] = useState(lockedLeagueId ?? "");
   const [entryFee, setEntryFee] = useState("0");
-  const [wagerMode, setWagerMode] = useState<"none" | "pot" | "odds">("pot");
+  const [wagerMode, setWagerMode] = useState<"none" | "pot" | "custom">("pot");
   const [stake, setStake] = useState("10");
-  const [oddsScope, setOddsScope] = useState<OddsScope>("player");
+  const [wagerScope, setWagerScope] = useState<WagerScope>("player");
   const [team1Name, setTeam1Name] = useState("Team 1");
   const [team2Name, setTeam2Name] = useState("Team 2");
   /** playerId -> "1" | "2" */
   const [playerTeam, setPlayerTeam] = useState<Record<string, "1" | "2">>({});
-  /** playerId -> { num, den } */
-  const [playerOdds, setPlayerOdds] = useState<
-    Record<string, { num: string; den: string }>
-  >({});
-  const [team1Odds, setTeam1Odds] = useState({ num: "2", den: "1" });
-  const [team2Odds, setTeam2Odds] = useState({ num: "", den: "1" });
+  /** playerId -> money amount string */
+  const [playerWagers, setPlayerWagers] = useState<Record<string, string>>({});
+  const [team1Wager, setTeam1Wager] = useState("10");
+  const [team2Wager, setTeam2Wager] = useState("10");
   const [format, setFormat] = useState("single_elim");
   const [bracketSize, setBracketSize] = useState("");
   const [notes, setNotes] = useState("");
   const [showExtras, setShowExtras] = useState(false);
-  const [showOdds, setShowOdds] = useState(false);
+  const [showCustom, setShowCustom] = useState(false);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([
     currentUserId,
   ]);
@@ -167,10 +163,10 @@ export function CreateWizard({
         }
         return kept;
       });
-      setPlayerOdds((odds) => {
-        const kept: Record<string, { num: string; den: string }> = {};
+      setPlayerWagers((wagers) => {
+        const kept: Record<string, string> = {};
         for (const pid of next) {
-          kept[pid] = odds[pid] ?? { num: "1", den: "1" };
+          kept[pid] = wagers[pid] ?? (stake || "10");
         }
         return kept;
       });
@@ -188,40 +184,41 @@ export function CreateWizard({
     });
   }
 
-  function ensurePlayerOdds(ids: string[]) {
-    setPlayerOdds((prev) => {
-      const next: Record<string, { num: string; den: string }> = {};
+  function ensurePlayerWagers(ids: string[]) {
+    setPlayerWagers((prev) => {
+      const next: Record<string, string> = {};
+      const fallback = stake || "10";
       for (const id of ids) {
-        next[id] = prev[id] ?? { num: "1", den: "1" };
+        next[id] = prev[id] ?? fallback;
       }
       return next;
     });
   }
 
-  function validateOdds(): string | null {
-    if (wagerMode !== "odds") return null;
-    const stakeNum = Number(stake);
-    if (!(stakeNum > 0)) {
-      return "Enter a stake greater than 0 for odds wagers.";
-    }
-    if (oddsScope === "team") {
+  function validateCustomWagers(): string | null {
+    if (wagerMode !== "custom") return null;
+    if (wagerScope === "team") {
       const missing = selectedPlayerIds.filter((id) => !playerTeam[id]);
       if (missing.length) return "Assign every player to a team.";
-      const t1 = Number(team1Odds.num);
-      const t1d = Number(team1Odds.den);
-      const t2 = Number(team2Odds.num);
-      const t2d = Number(team2Odds.den);
-      const hasT1 = t1 > 0 && t1d > 0;
-      const hasT2 = t2 > 0 && t2d > 0;
-      if (!hasT1 && !hasT2) {
-        return "Set odds for at least one team (e.g. 2 / 1).";
+      const t1 = Number(team1Wager);
+      const t2 = Number(team2Wager);
+      if (!(t1 > 0) && !(t2 > 0)) {
+        return "Enter how much money at least one team is wagering.";
+      }
+      if (!(t1 > 0) || !(t2 > 0)) {
+        return "Enter a money amount greater than 0 for both teams.";
       }
     } else {
-      const anyLine = selectedPlayerIds.some((id) => {
-        const o = playerOdds[id];
-        return o && Number(o.num) > 0 && Number(o.den) > 0;
-      });
-      if (!anyLine) return "Set odds for at least one player (e.g. 2 / 1).";
+      const any = selectedPlayerIds.some((id) => Number(playerWagers[id]) > 0);
+      if (!any) {
+        return "Enter how much money each player is wagering.";
+      }
+      const missing = selectedPlayerIds.filter(
+        (id) => !(Number(playerWagers[id]) > 0)
+      );
+      if (missing.length) {
+        return "Enter a money amount greater than 0 for every player.";
+      }
     }
     return null;
   }
@@ -290,9 +287,9 @@ export function CreateWizard({
             setError("Select at least two players.");
             return;
           }
-          const oddsError = validateOdds();
-          if (oddsError) {
-            setError(oddsError);
+          const customError = validateCustomWagers();
+          if (customError) {
+            setError(customError);
             return;
           }
           fd.set("kind", matchKind);
@@ -310,23 +307,19 @@ export function CreateWizard({
           for (const id of selectedPlayerIds) {
             fd.append("player_id", id);
           }
-          if (wagerMode === "odds") {
-            fd.set("odds_scope", oddsScope);
-            if (oddsScope === "team") {
+          if (wagerMode === "custom") {
+            fd.set("wager_scope", wagerScope);
+            if (wagerScope === "team") {
               fd.set("team_1_name", team1Name.trim() || "Team 1");
               fd.set("team_2_name", team2Name.trim() || "Team 2");
-              fd.set("odds_team_1_num", team1Odds.num);
-              fd.set("odds_team_1_den", team1Odds.den || "1");
-              fd.set("odds_team_2_num", team2Odds.num);
-              fd.set("odds_team_2_den", team2Odds.den || "1");
+              fd.set("wager_team_1", team1Wager);
+              fd.set("wager_team_2", team2Wager);
               for (const id of selectedPlayerIds) {
                 fd.set(`player_team_${id}`, playerTeam[id] ?? "1");
               }
             } else {
               for (const id of selectedPlayerIds) {
-                const o = playerOdds[id] ?? { num: "1", den: "1" };
-                fd.set(`odds_player_${id}_num`, o.num);
-                fd.set(`odds_player_${id}_den`, o.den || "1");
+                fd.set(`wager_player_${id}`, playerWagers[id] ?? "0");
               }
             }
           }
@@ -448,7 +441,7 @@ export function CreateWizard({
               />
             </label>
             <label className="block">
-              <span className={labelClass}>Season entry fee (units)</span>
+              <span className={labelClass}>Season entry fee (money)</span>
               <input
                 type="number"
                 min={0}
@@ -466,7 +459,7 @@ export function CreateWizard({
               ["Type", "League"],
               ["Name", leagueName],
               ["Description", leagueDescription || "—"],
-              ["Entry fee", `${leagueEntryFee || 0} units`],
+              ["Entry fee", `${leagueEntryFee || 0} money`],
             ]}
           />
         )}
@@ -675,7 +668,11 @@ export function CreateWizard({
             <div className="space-y-2">
               {(
                 [
-                  ["pot", "Equal pot", `Everyone puts in ${stake || "10"} units`],
+                  [
+                    "pot",
+                    "Equal pot",
+                    `Everyone puts in ${stake || "10"} money`,
+                  ],
                   ["none", "No wager", "Just track who won"],
                 ] as const
               ).map(([value, label, desc]) => (
@@ -684,7 +681,7 @@ export function CreateWizard({
                   type="button"
                   onClick={() => {
                     setWagerMode(value);
-                    setShowOdds(false);
+                    setShowCustom(false);
                   }}
                   className={wagerMode === value ? choiceActive : choiceClass}
                 >
@@ -696,7 +693,7 @@ export function CreateWizard({
 
             {wagerMode === "pot" && (
               <label className="block">
-                <span className={labelClass}>Stake per player (units)</span>
+                <span className={labelClass}>Stake per player (money)</span>
                 <input
                   type="number"
                   min={0}
@@ -710,13 +707,15 @@ export function CreateWizard({
             <button
               type="button"
               onClick={() => {
-                setShowOdds((v) => {
+                setShowCustom((v) => {
                   const next = !v;
                   if (next) {
-                    setWagerMode("odds");
-                    ensurePlayerOdds(selectedPlayerIds);
+                    setWagerMode("custom");
+                    ensurePlayerWagers(selectedPlayerIds);
                     ensureTeamAssignments(selectedPlayerIds);
-                  } else if (wagerMode === "odds") {
+                    setTeam1Wager((w) => w || stake || "10");
+                    setTeam2Wager((w) => w || stake || "10");
+                  } else if (wagerMode === "custom") {
                     setWagerMode("pot");
                   }
                   return next;
@@ -724,25 +723,15 @@ export function CreateWizard({
               }}
               className="text-sm text-muted underline-offset-2 hover:text-fg hover:underline"
             >
-              {showOdds || wagerMode === "odds"
-                ? "Hide odds options"
-                : "Set custom odds instead"}
+              {showCustom || wagerMode === "custom"
+                ? "Hide custom wager options"
+                : "Set custom wagers instead"}
             </button>
 
-            {(showOdds || wagerMode === "odds") && (
+            {(showCustom || wagerMode === "custom") && (
               <div className="space-y-4 border-t border-line pt-4">
-                <label className="block">
-                  <span className={labelClass}>Stake per line (units)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    value={stake}
-                    onChange={(e) => setStake(e.target.value)}
-                    className={inputClass}
-                  />
-                </label>
                 <fieldset>
-                  <legend className={labelClass}>Odds for</legend>
+                  <legend className={labelClass}>Wager by</legend>
                   <div className="grid grid-cols-2 gap-2">
                     {(
                       [
@@ -754,15 +743,15 @@ export function CreateWizard({
                         key={value}
                         type="button"
                         onClick={() => {
-                          setOddsScope(value);
+                          setWagerScope(value);
                           if (value === "team") {
                             ensureTeamAssignments(selectedPlayerIds);
                           } else {
-                            ensurePlayerOdds(selectedPlayerIds);
+                            ensurePlayerWagers(selectedPlayerIds);
                           }
                         }}
                         className={
-                          oddsScope === value ? choiceActive : choiceClass
+                          wagerScope === value ? choiceActive : choiceClass
                         }
                       >
                         <p className="font-medium">{label}</p>
@@ -771,19 +760,17 @@ export function CreateWizard({
                   </div>
                 </fieldset>
                 <p className="text-sm text-muted">
-                  Example: {formatOdds(2, 1)} on {stake || "10"} means the other
-                  side puts up{" "}
-                  {liability(Number(stake) || 10, 2, 1).toFixed(0)} if that line
-                  wins.
+                  Enter how much money each side is putting up. Losers forfeit
+                  their stake; winners split that pot.
                 </p>
 
-                {oddsScope === "player" ? (
+                {wagerScope === "player" ? (
                   <ul className="space-y-3">
                     {selectedPlayerIds.map((id) => {
                       const name =
                         users.find((u) => u.id === id)?.display_name ??
                         "Player";
-                      const o = playerOdds[id] ?? { num: "1", den: "1" };
+                      const amount = playerWagers[id] ?? (stake || "10");
                       return (
                         <li
                           key={id}
@@ -792,35 +779,20 @@ export function CreateWizard({
                           <span className="min-w-0 flex-1 break-words font-medium">
                             {name}
                           </span>
-                          <div className="flex shrink-0 items-center gap-1.5">
-                            <input
-                              type="number"
-                              min={1}
-                              value={o.num}
-                              onChange={(e) =>
-                                setPlayerOdds((prev) => ({
-                                  ...prev,
-                                  [id]: { ...o, num: e.target.value },
-                                }))
-                              }
-                              className="w-16 rounded-sm border border-line bg-bg-elevated px-2 py-2 text-base outline-none focus:border-accent sm:text-sm"
-                              aria-label={`${name} odds numerator`}
-                            />
-                            <span className="text-muted">to</span>
-                            <input
-                              type="number"
-                              min={1}
-                              value={o.den}
-                              onChange={(e) =>
-                                setPlayerOdds((prev) => ({
-                                  ...prev,
-                                  [id]: { ...o, den: e.target.value },
-                                }))
-                              }
-                              className="w-16 rounded-sm border border-line bg-bg-elevated px-2 py-2 text-base outline-none focus:border-accent sm:text-sm"
-                              aria-label={`${name} odds denominator`}
-                            />
-                          </div>
+                          <input
+                            type="number"
+                            min={0}
+                            step="any"
+                            value={amount}
+                            onChange={(e) =>
+                              setPlayerWagers((prev) => ({
+                                ...prev,
+                                [id]: e.target.value,
+                              }))
+                            }
+                            className="w-28 rounded-sm border border-line bg-bg-elevated px-2 py-2 text-base outline-none focus:border-accent sm:text-sm"
+                            aria-label={`${name} wager money`}
+                          />
                         </li>
                       );
                     })}
@@ -848,89 +820,38 @@ export function CreateWizard({
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="block">
                         <span className={labelClass}>
-                          {team1Name || "Team 1"} odds
+                          {team1Name || "Team 1"} wager (money)
                         </span>
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="number"
-                            min={1}
-                            value={team1Odds.num}
-                            onChange={(e) =>
-                              setTeam1Odds((o) => ({
-                                ...o,
-                                num: e.target.value,
-                              }))
-                            }
-                            placeholder="2"
-                            className={inputClass}
-                          />
-                          <span className="shrink-0 text-muted">to</span>
-                          <input
-                            type="number"
-                            min={1}
-                            value={team1Odds.den}
-                            onChange={(e) =>
-                              setTeam1Odds((o) => ({
-                                ...o,
-                                den: e.target.value,
-                              }))
-                            }
-                            className={inputClass}
-                          />
-                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          step="any"
+                          value={team1Wager}
+                          onChange={(e) => setTeam1Wager(e.target.value)}
+                          className={inputClass}
+                        />
                       </label>
                       <label className="block">
                         <span className={labelClass}>
-                          {team2Name || "Team 2"} odds (optional)
+                          {team2Name || "Team 2"} wager (money)
                         </span>
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="number"
-                            min={1}
-                            value={team2Odds.num}
-                            onChange={(e) =>
-                              setTeam2Odds((o) => ({
-                                ...o,
-                                num: e.target.value,
-                              }))
-                            }
-                            placeholder="—"
-                            className={inputClass}
-                          />
-                          <span className="shrink-0 text-muted">to</span>
-                          <input
-                            type="number"
-                            min={1}
-                            value={team2Odds.den}
-                            onChange={(e) =>
-                              setTeam2Odds((o) => ({
-                                ...o,
-                                den: e.target.value,
-                              }))
-                            }
-                            className={inputClass}
-                          />
-                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          step="any"
+                          value={team2Wager}
+                          onChange={(e) => setTeam2Wager(e.target.value)}
+                          className={inputClass}
+                        />
                       </label>
                     </div>
-                    {Number(team1Odds.num) > 0 &&
-                      Number(team1Odds.den) > 0 &&
-                      Number(stake) > 0 && (
-                        <p className="text-sm text-muted">
-                          If {team1Name || "Team 1"} wins at{" "}
-                          {formatOdds(
-                            Number(team1Odds.num),
-                            Number(team1Odds.den)
-                          )}{" "}
-                          on {stake}, {team2Name || "Team 2"} puts up{" "}
-                          {liability(
-                            Number(stake),
-                            Number(team1Odds.num),
-                            Number(team1Odds.den)
-                          ).toFixed(0)}
-                          .
-                        </p>
-                      )}
+                    {Number(team1Wager) > 0 && Number(team2Wager) > 0 && (
+                      <p className="text-sm text-muted">
+                        If {team1Name || "Team 1"} wins, they take{" "}
+                        {team2Wager} money. If {team2Name || "Team 2"} wins,
+                        they take {team1Wager} money.
+                      </p>
+                    )}
                     <div>
                       <p className={`${labelClass} mb-2`}>Assign players</p>
                       <ul className="space-y-2">
@@ -982,7 +903,7 @@ export function CreateWizard({
             )}
 
             <label className="block">
-              <span className={labelClass}>Entry fee (optional, units)</span>
+              <span className={labelClass}>Entry fee (optional, money)</span>
               <input
                 type="number"
                 min={0}
@@ -1004,14 +925,14 @@ export function CreateWizard({
                 ["Players", playerNames],
                 [
                   "Wager",
-                  wagerMode === "odds"
-                    ? `odds · ${oddsScope === "team" ? "teams" : "per player"}`
+                  wagerMode === "custom"
+                    ? `custom · ${wagerScope === "team" ? "teams" : "per player"}`
                     : wagerMode === "pot"
-                      ? `equal pot · ${stake || 0}`
+                      ? `equal pot · ${stake || 0} money`
                       : "none",
                 ],
                 ...(Number(entryFee) > 0
-                  ? [["Entry fee", `${entryFee} units`] as [string, string]]
+                  ? [["Entry fee", `${entryFee} money`] as [string, string]]
                   : []),
               ]}
             />

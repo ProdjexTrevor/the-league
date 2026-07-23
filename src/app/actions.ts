@@ -238,14 +238,18 @@ export async function createEvent(formData: FormData) {
 
   // Creator is already inserted by create_event RPC; add the rest
   const entry = Number(data.entry_fee_units) || 0;
-  const oddsScope = String(formData.get("odds_scope") ?? "player");
+  const wagerScope = String(
+    formData.get("wager_scope") ?? formData.get("odds_scope") ?? "player"
+  );
   const team1Name =
     String(formData.get("team_1_name") ?? "Team 1").trim() || "Team 1";
   const team2Name =
     String(formData.get("team_2_name") ?? "Team 2").trim() || "Team 2";
+  const usesTeamSides =
+    (wagerMode === "custom" || wagerMode === "odds") && wagerScope === "team";
 
   function sideForPlayer(playerId: string): string | null {
-    if (wagerMode !== "odds" || oddsScope !== "team") return null;
+    if (!usesTeamSides) return null;
     const slot = String(formData.get(`player_team_${playerId}`) ?? "").trim();
     if (slot === "1") return team1Name;
     if (slot === "2") return team2Name;
@@ -275,12 +279,60 @@ export async function createEvent(formData: FormData) {
     if (playerError) fail(playerError.message);
   }
 
-  // Creator-defined odds lines (per player or per team)
+  // Custom wagers: each player or team puts up an explicit money amount
+  if (wagerMode === "custom") {
+    let linesCreated = 0;
+
+    if (wagerScope === "team") {
+      const unassigned = playerIds.filter((id) => !sideForPlayer(id));
+      if (unassigned.length > 0) {
+        fail("Assign every player to a team for custom team wagers.");
+      }
+      for (const [slot, label] of [
+        ["1", team1Name],
+        ["2", team2Name],
+      ] as const) {
+        const amount = Number(formData.get(`wager_team_${slot}`) ?? 0);
+        if (amount > 0) {
+          const { error: lineError } = await supabase.from("wager_lines").insert({
+            event_id: data.id,
+            side_label: label,
+            odds_num: 1,
+            odds_den: 1,
+            stake_units: amount,
+          });
+          if (lineError) fail(lineError.message);
+          linesCreated += 1;
+        }
+      }
+    } else {
+      for (const playerId of playerIds) {
+        const amount = Number(formData.get(`wager_player_${playerId}`) ?? 0);
+        if (amount > 0) {
+          const { error: lineError } = await supabase.from("wager_lines").insert({
+            event_id: data.id,
+            player_id: playerId,
+            odds_num: 1,
+            odds_den: 1,
+            stake_units: amount,
+          });
+          if (lineError) fail(lineError.message);
+          linesCreated += 1;
+        }
+      }
+    }
+
+    if (linesCreated === 0) {
+      fail("Enter how much money each player or team is wagering.");
+    }
+  }
+
+  // Legacy odds lines (existing events / old clients)
   if (wagerMode === "odds") {
     const stakeDefault = Number.isFinite(stake) ? stake : 0;
     let linesCreated = 0;
 
-    if (oddsScope === "team") {
+    if (wagerScope === "team") {
       for (const [slot, label] of [
         ["1", team1Name],
         ["2", team2Name],
@@ -362,12 +414,20 @@ export async function addPlayerToEvent(eventId: string, formData: FormData) {
 export async function setWagerLine(eventId: string, formData: FormData) {
   const playerId = String(formData.get("player_id") ?? "").trim() || null;
   const sideLabel = String(formData.get("side_label") ?? "").trim() || null;
-  const oddsNum = Number(formData.get("odds_num") ?? 0);
-  const oddsDen = Number(formData.get("odds_den") ?? 1);
-  const stake = Number(formData.get("stake_units") ?? 0);
+  const stake = Number(
+    formData.get("stake_units") ?? formData.get("wager_amount") ?? 0
+  );
+  const oddsNumRaw = formData.get("odds_num");
+  const oddsDenRaw = formData.get("odds_den");
+  const hasOdds = oddsNumRaw != null && String(oddsNumRaw).trim() !== "";
+  const oddsNum = hasOdds ? Number(oddsNumRaw) : 1;
+  const oddsDen = hasOdds ? Number(oddsDenRaw ?? 1) : 1;
 
   if (!playerId && !sideLabel) fail("Pick a player or side.");
-  if (!(oddsNum > 0) || !(oddsDen > 0)) fail("Odds must be like 2 / 1.");
+  if (!(stake > 0)) fail("Enter how much money is being wagered.");
+  if (hasOdds && (!(oddsNum > 0) || !(oddsDen > 0))) {
+    fail("Odds must be like 2 / 1.");
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.from("wager_lines").insert({
@@ -497,6 +557,55 @@ export async function settleEvent(eventId: string, formData: FormData) {
       const paid = -stake;
       const won = winnerIds.includes(p.user_id) ? share : 0;
       deltas.set(p.user_id, (deltas.get(p.user_id) ?? 0) + paid + won);
+    }
+  }
+
+  // Custom: each player/team puts up money; losers forfeit; winners split the pot
+  if (wagerMode === "custom") {
+    const { data: lines } = await supabase
+      .from("wager_lines")
+      .select("*")
+      .eq("event_id", eventId);
+
+    const stakeByPlayer = new Map<string, number>();
+    players.forEach((p) => stakeByPlayer.set(p.user_id, 0));
+
+    for (const line of lines ?? []) {
+      const amount = Number(line.stake_units) || 0;
+      if (!(amount > 0)) continue;
+
+      if (line.player_id) {
+        stakeByPlayer.set(
+          line.player_id,
+          (stakeByPlayer.get(line.player_id) ?? 0) + amount
+        );
+        continue;
+      }
+
+      if (!line.side_label) continue;
+      const members = players.filter((p) => p.side_label === line.side_label);
+      if (members.length === 0) continue;
+      const each = amount / members.length;
+      for (const m of members) {
+        stakeByPlayer.set(m.user_id, (stakeByPlayer.get(m.user_id) ?? 0) + each);
+      }
+    }
+
+    const winnerSet = new Set(winnerIds);
+    let losersPot = 0;
+    for (const p of players) {
+      if (winnerSet.has(p.user_id)) continue;
+      const s = stakeByPlayer.get(p.user_id) ?? 0;
+      if (s > 0) {
+        losersPot += s;
+        deltas.set(p.user_id, (deltas.get(p.user_id) ?? 0) - s);
+      }
+    }
+    if (losersPot > 0 && winnerIds.length > 0) {
+      const share = losersPot / winnerIds.length;
+      for (const w of winnerIds) {
+        deltas.set(w, (deltas.get(w) ?? 0) + share);
+      }
     }
   }
 

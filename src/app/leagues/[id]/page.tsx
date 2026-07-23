@@ -36,7 +36,7 @@ export default async function LeaguePage({ params }: Props) {
         .order("created_at", { ascending: false }),
       supabase
         .from("league_standings")
-        .select("user_id, games_played, wins, net_units")
+        .select("user_id, games_played, wins, losses, net_units, money_won, money_lost")
         .eq("league_id", id)
         .order("net_units", { ascending: false }),
     ]);
@@ -86,13 +86,16 @@ export default async function LeaguePage({ params }: Props) {
           <p className="mt-3 text-sm text-muted">No completed events yet.</p>
         ) : (
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[20rem] text-left text-sm">
+            <table className="w-full min-w-[28rem] text-left text-sm">
               <thead className="border-b border-line text-muted">
                 <tr>
                   <th className="py-2 pr-3 font-medium">Player</th>
                   <th className="py-2 pr-3 font-medium">Played</th>
                   <th className="py-2 pr-3 font-medium">Wins</th>
-                  <th className="py-2 font-medium">Net units</th>
+                  <th className="py-2 pr-3 font-medium">Losses</th>
+                  <th className="py-2 pr-3 font-medium">Won</th>
+                  <th className="py-2 pr-3 font-medium">Lost</th>
+                  <th className="py-2 font-medium">Net money</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -103,6 +106,13 @@ export default async function LeaguePage({ params }: Props) {
                     </td>
                     <td className="py-2.5 pr-3">{row.games_played ?? 0}</td>
                     <td className="py-2.5 pr-3">{row.wins ?? 0}</td>
+                    <td className="py-2.5 pr-3">{row.losses ?? 0}</td>
+                    <td className="py-2.5 pr-3">
+                      {Number(row.money_won ?? 0).toFixed(0)}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      {Number(row.money_lost ?? 0).toFixed(0)}
+                    </td>
                     <td className="py-2.5 font-medium text-accent">
                       {Number(row.net_units ?? 0).toFixed(0)}
                     </td>

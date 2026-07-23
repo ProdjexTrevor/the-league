@@ -9,10 +9,12 @@ import {
 } from "@/app/actions";
 import { createClient } from "@/lib/supabase/server";
 import {
+  formatMoney,
   formatOdds,
   liability,
   payout,
   scoringModeLabel,
+  wagerModeLabel,
   type ScoringMode,
 } from "@/lib/wager";
 
@@ -89,6 +91,9 @@ export default async function EventPage({ params }: Props) {
     return settleEvent(id, formData);
   }
 
+  const showWagerBoard =
+    event.wager_mode === "custom" || event.wager_mode === "odds";
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-8 pb-20 sm:px-6 sm:py-10">
       <Link
@@ -106,9 +111,11 @@ export default async function EventPage({ params }: Props) {
           {event.title}
         </h1>
         <p className="mt-3 text-sm text-muted">
-          {scoringModeLabel(scoringMode)} · entry {event.entry_fee_units} · wager{" "}
-          {event.wager_mode}
-          {event.wager_mode !== "none" && ` · stake ${event.default_stake_units}`}
+          {scoringModeLabel(scoringMode)} · entry{" "}
+          {formatMoney(event.entry_fee_units)} money · wager{" "}
+          {wagerModeLabel(event.wager_mode)}
+          {event.wager_mode === "pot" &&
+            ` · stake ${formatMoney(event.default_stake_units)} money`}
         </p>
         {event.notes && (
           <p className="mt-2 break-words text-sm text-muted">{event.notes}</p>
@@ -139,7 +146,7 @@ export default async function EventPage({ params }: Props) {
                       p.placement ? `#${p.placement}` : null,
                       p.score != null ? `score ${p.score}` : null,
                       p.outcome,
-                      `${Number(p.units_delta) >= 0 ? "+" : ""}${p.units_delta}`,
+                      `${Number(p.units_delta) >= 0 ? "+" : ""}${formatMoney(p.units_delta)} money`,
                     ]
                       .filter(Boolean)
                       .join(" · ")
@@ -189,19 +196,15 @@ export default async function EventPage({ params }: Props) {
         </section>
       )}
 
-      {event.wager_mode === "odds" && (
+      {showWagerBoard && (
         <section className="mt-10">
-          <h2 className="text-lg font-semibold">Odds board</h2>
+          <h2 className="text-lg font-semibold">
+            {event.wager_mode === "custom" ? "Custom wagers" : "Odds board"}
+          </h2>
           <p className="mt-1 text-sm text-muted">
-            Fractional odds set by the creator. Example: {formatOdds(2, 1)} on
-            stake {event.default_stake_units} means the other side puts up{" "}
-            {liability(
-              Number(event.default_stake_units) || 0,
-              2,
-              1
-            ).toFixed(0)}{" "}
-            if that line wins (full return{" "}
-            {payout(Number(event.default_stake_units) || 0, 2, 1).toFixed(0)}).
+            {event.wager_mode === "custom"
+              ? "Each player or team puts up the money shown. Losers forfeit; winners split that pot."
+              : `Fractional odds (legacy). Example: ${formatOdds(2, 1)} on stake ${formatMoney(event.default_stake_units)} means the other side puts up ${liability(Number(event.default_stake_units) || 0, 2, 1).toFixed(0)} if that line wins (full return ${payout(Number(event.default_stake_units) || 0, 2, 1).toFixed(0)}).`}
           </p>
           <ul className="mt-4 divide-y divide-line border-y border-line">
             {lines?.map((line) => (
@@ -213,20 +216,28 @@ export default async function EventPage({ params }: Props) {
                   {line.player_id
                     ? nameById.get(line.player_id) ?? line.player_id
                     : line.side_label}{" "}
-                  <span className="text-accent">
-                    {formatOdds(line.odds_num, line.odds_den)}
-                  </span>{" "}
-                  · stake {line.stake_units}
-                  {Number(line.stake_units) > 0 && (
-                    <span className="text-muted">
-                      {" "}
-                      · opposite puts up{" "}
-                      {liability(
-                        Number(line.stake_units),
-                        line.odds_num,
-                        line.odds_den
-                      ).toFixed(0)}
+                  {event.wager_mode === "custom" ? (
+                    <span className="text-accent">
+                      {formatMoney(line.stake_units)} money
                     </span>
+                  ) : (
+                    <>
+                      <span className="text-accent">
+                        {formatOdds(line.odds_num, line.odds_den)}
+                      </span>{" "}
+                      · stake {formatMoney(line.stake_units)} money
+                      {Number(line.stake_units) > 0 && (
+                        <span className="text-muted">
+                          {" "}
+                          · opposite puts up{" "}
+                          {liability(
+                            Number(line.stake_units),
+                            line.odds_num,
+                            line.odds_den
+                          ).toFixed(0)}
+                        </span>
+                      )}
+                    </>
                   )}
                 </span>
                 {event.status !== "completed" && (
@@ -240,11 +251,14 @@ export default async function EventPage({ params }: Props) {
               </li>
             ))}
             {(lines?.length ?? 0) === 0 && (
-              <li className="py-3 text-sm text-muted">No lines yet.</li>
+              <li className="py-3 text-sm text-muted">No wagers yet.</li>
             )}
           </ul>
           {event.status !== "completed" && (players?.length ?? 0) > 0 && (
-            <form action={setLineAction} className="mt-4 grid gap-3 sm:grid-cols-4">
+            <form
+              action={setLineAction}
+              className="mt-4 grid gap-3 sm:grid-cols-4"
+            >
               <select
                 name="player_id"
                 defaultValue=""
@@ -262,36 +276,43 @@ export default async function EventPage({ params }: Props) {
                 placeholder="Team / side label"
                 className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:col-span-2"
               />
-              <input
-                name="odds_num"
-                type="number"
-                min={1}
-                required
-                defaultValue={2}
-                placeholder="2"
-                className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
-              />
-              <input
-                name="odds_den"
-                type="number"
-                min={1}
-                required
-                defaultValue={1}
-                placeholder="1"
-                className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
-              />
+              {event.wager_mode === "odds" && (
+                <>
+                  <input
+                    name="odds_num"
+                    type="number"
+                    min={1}
+                    required
+                    defaultValue={2}
+                    placeholder="2"
+                    className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
+                  />
+                  <input
+                    name="odds_den"
+                    type="number"
+                    min={1}
+                    required
+                    defaultValue={1}
+                    placeholder="1"
+                    className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
+                  />
+                </>
+              )}
               <input
                 name="stake_units"
                 type="number"
                 min={0}
-                defaultValue={event.default_stake_units}
+                step="any"
+                required
+                defaultValue={event.default_stake_units || 10}
+                placeholder="Money"
                 className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:col-span-2"
               />
               <button
                 type="submit"
                 className="rounded-sm border border-line px-4 py-2.5 text-sm hover:border-fg/40 sm:col-span-2"
               >
-                Add line
+                Add wager
               </button>
             </form>
           )}
