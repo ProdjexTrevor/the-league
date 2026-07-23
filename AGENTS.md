@@ -23,4 +23,10 @@ Units / Venmo deep links only. No payment processor APIs.
 
 ## Mobile / TestFlight
 
-No Expo/native app in-repo yet. User-facing work must either start the mobile track or explicitly report TestFlight blocked.
+Expo app lives in `mobile/` (port **8082** so it can run beside another Expo tunnel).
+
+```powershell
+npm run mobile:tunnel
+```
+
+TestFlight: EAS build from `mobile/` after `eas login` + `eas init`. Bundle ID: `com.prodjex.theleague`.

@@ -40,8 +40,9 @@ Every feature or fix goes through **all** stages below unless the user explicitl
 ## 5. Mobile / TestFlight
 
 - After web is pushed and verified, advance the **native** track:
-  - If an Expo/React Native (or other) app exists: apply the same change (or shared API contract), run a TestFlight-bound build (`eas build` / App Store Connect flow as configured).
-  - If no mobile app exists yet: either scaffold the Expo app toward TestFlight **or** report clearly `TestFlight blocked: no mobile app yet` and what is needed (Apple team, EAS project, bundle id) — do not silently skip.
+- If an Expo/React Native (or other) app exists in `mobile/`: apply the same change (or shared API contract), run a TestFlight-bound build (`eas build` / App Store Connect flow as configured) when the feature is user-facing.
+- Prefer `npm run mobile:tunnel` (port 8082) so other Expo tunnels stay up.
+- If EAS/Apple credentials are missing: report `TestFlight blocked: <missing piece>` — do not silently skip for user-facing features.
 - Web-only docs/tooling (e.g. Slack bridge) may skip TestFlight when there is no user-facing app change; say so explicitly.
 
 ## Done means

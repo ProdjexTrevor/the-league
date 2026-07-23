@@ -47,3 +47,7 @@ next-env.d.ts
 .env.vercel*
 .env.vercel.check
 
+
+mobile/.env
+mobile/.env.local
+

@@ -1,0 +1,23 @@
+# Learn more https://docs.expo.io/guides/monorepos/
+node_modules/
+.expo/
+dist/
+npm-debug.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+.env
+.env.local
+
+# macOS
+.DS_Store
+
+# Temporary files created by Metro
+.metro-health-check*
+
+# typescript
+*.tsbuildinfo
