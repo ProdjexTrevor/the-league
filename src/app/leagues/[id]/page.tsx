@@ -109,7 +109,16 @@ export default async function LeaguePage({ params }: Props) {
                 {standings.map((row) => (
                   <tr key={row.user_id}>
                     <td className="max-w-[10rem] truncate py-2.5 pr-3 sm:max-w-none sm:whitespace-normal">
-                      {nameById.get(row.user_id ?? "") ?? "Player"}
+                      {row.user_id ? (
+                        <Link
+                          href={`/players/${row.user_id}`}
+                          className="hover:text-accent"
+                        >
+                          {nameById.get(row.user_id) ?? "Player"}
+                        </Link>
+                      ) : (
+                        "Player"
+                      )}
                     </td>
                     <td className="py-2.5 pr-3">{row.games_played ?? 0}</td>
                     <td className="py-2.5 pr-3">{row.wins ?? 0}</td>
@@ -137,14 +146,16 @@ export default async function LeaguePage({ params }: Props) {
           {members?.map((m) => {
             const profile = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
             return (
-              <li
-                key={m.user_id}
-                className="rounded-sm border border-line px-3 py-1.5 text-sm"
-              >
-                {profile?.display_name ?? "Player"}
-                {m.role === "owner" && (
-                  <span className="ml-2 text-xs text-muted">owner</span>
-                )}
+              <li key={m.user_id}>
+                <Link
+                  href={`/players/${m.user_id}`}
+                  className="inline-flex items-center rounded-sm border border-line px-3 py-1.5 text-sm transition hover:border-fg/40"
+                >
+                  {profile?.display_name ?? "Player"}
+                  {m.role === "owner" && (
+                    <span className="ml-2 text-xs text-muted">owner</span>
+                  )}
+                </Link>
               </li>
             );
           })}

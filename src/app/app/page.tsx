@@ -87,6 +87,12 @@ export default async function AppPage() {
           </p>
         </div>
         <nav className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Link
+            href={`/players/${user.id}`}
+            className="text-sm text-muted hover:text-fg"
+          >
+            My stats
+          </Link>
           <Link href="/wallet" className="text-sm text-muted hover:text-fg">
             Wallet
           </Link>

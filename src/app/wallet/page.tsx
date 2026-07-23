@@ -82,9 +82,17 @@ export default async function WalletPage() {
         <Link href="/app" className="font-display text-2xl text-fg">
           THE LEAGUE
         </Link>
-        <Link href="/app" className="shrink-0 text-sm text-muted hover:text-fg">
-          Dashboard
-        </Link>
+        <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2">
+          <Link
+            href={`/players/${user.id}`}
+            className="text-sm text-muted hover:text-fg"
+          >
+            My stats
+          </Link>
+          <Link href="/app" className="text-sm text-muted hover:text-fg">
+            Dashboard
+          </Link>
+        </div>
       </div>
 
       <h1 className="mt-10 font-display text-4xl text-fg sm:text-5xl">Wallet</h1>

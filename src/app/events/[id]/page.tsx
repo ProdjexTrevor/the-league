@@ -222,7 +222,12 @@ export default async function EventPage({ params }: Props) {
                 className="flex flex-col gap-1 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3"
               >
                 <span className="min-w-0 break-words">
-                  {nameById.get(p.user_id)}
+                  <Link
+                    href={`/players/${p.user_id}`}
+                    className="hover:text-accent"
+                  >
+                    {nameById.get(p.user_id)}
+                  </Link>
                   {p.side_label ? ` (${p.side_label})` : ""}
                 </span>
                 <span className="shrink-0 text-muted">
