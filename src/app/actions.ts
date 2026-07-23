@@ -238,37 +238,91 @@ export async function createEvent(formData: FormData) {
 
   // Creator is already inserted by create_event RPC; add the rest
   const entry = Number(data.entry_fee_units) || 0;
+  const oddsScope = String(formData.get("odds_scope") ?? "player");
+  const team1Name =
+    String(formData.get("team_1_name") ?? "Team 1").trim() || "Team 1";
+  const team2Name =
+    String(formData.get("team_2_name") ?? "Team 2").trim() || "Team 2";
+
+  function sideForPlayer(playerId: string): string | null {
+    if (wagerMode !== "odds" || oddsScope !== "team") return null;
+    const slot = String(formData.get(`player_team_${playerId}`) ?? "").trim();
+    if (slot === "1") return team1Name;
+    if (slot === "2") return team2Name;
+    return null;
+  }
+
   for (const playerId of playerIds) {
-    if (playerId === data.created_by) continue;
+    const sideLabel = sideForPlayer(playerId);
+    if (playerId === data.created_by) {
+      if (sideLabel) {
+        const { error: sideError } = await supabase
+          .from("event_players")
+          .update({ side_label: sideLabel })
+          .eq("event_id", data.id)
+          .eq("user_id", playerId);
+        if (sideError) fail(sideError.message);
+      }
+      continue;
+    }
     const { error: playerError } = await supabase.from("event_players").insert({
       event_id: data.id,
       user_id: playerId,
+      side_label: sideLabel,
       entry_paid: entry > 0,
       units_paid: entry,
     });
     if (playerError) fail(playerError.message);
   }
 
-  // Optional initial odds lines
+  // Creator-defined odds lines (per player or per team)
   if (wagerMode === "odds") {
     const stakeDefault = Number.isFinite(stake) ? stake : 0;
-    for (const [key, value] of formData.entries()) {
-      if (typeof value !== "string") continue;
-      const playerMatch = key.match(/^odds_player_([a-zA-Z0-9_-]+)_num$/);
-      if (playerMatch) {
-        const playerId = playerMatch[1];
-        const den = Number(formData.get(`odds_player_${playerId}_den`) ?? 1);
-        const num = Number(value);
+    let linesCreated = 0;
+
+    if (oddsScope === "team") {
+      for (const [slot, label] of [
+        ["1", team1Name],
+        ["2", team2Name],
+      ] as const) {
+        const num = Number(formData.get(`odds_team_${slot}_num`) ?? 0);
+        const den = Number(formData.get(`odds_team_${slot}_den`) ?? 1);
         if (num > 0 && den > 0) {
-          await supabase.from("wager_lines").insert({
+          const { error: lineError } = await supabase.from("wager_lines").insert({
+            event_id: data.id,
+            side_label: label,
+            odds_num: num,
+            odds_den: den,
+            stake_units: stakeDefault,
+          });
+          if (lineError) fail(lineError.message);
+          linesCreated += 1;
+        }
+      }
+      const unassigned = playerIds.filter((id) => !sideForPlayer(id));
+      if (unassigned.length > 0) {
+        fail("Assign every player to a team when using team odds.");
+      }
+    } else {
+      for (const playerId of playerIds) {
+        const num = Number(formData.get(`odds_player_${playerId}_num`) ?? 0);
+        const den = Number(formData.get(`odds_player_${playerId}_den`) ?? 1);
+        if (num > 0 && den > 0) {
+          const { error: lineError } = await supabase.from("wager_lines").insert({
             event_id: data.id,
             player_id: playerId,
             odds_num: num,
             odds_den: den,
             stake_units: stakeDefault,
           });
+          if (lineError) fail(lineError.message);
+          linesCreated += 1;
         }
       }
+    }
+
+    if (linesCreated === 0) {
+      fail("Set odds for at least one player or team (e.g. 2 / 1).");
     }
   }
 
@@ -363,7 +417,7 @@ export async function settleEvent(eventId: string, formData: FormData) {
 
   const { data: players } = await supabase
     .from("event_players")
-    .select("user_id")
+    .select("user_id, side_label")
     .eq("event_id", eventId);
 
   if (!players?.length) fail("Add players before settling.");
@@ -454,23 +508,64 @@ export async function settleEvent(eventId: string, formData: FormData) {
 
     for (const line of lines ?? []) {
       const lineStake = Number(line.stake_units) || stake;
-      if (!lineStake || !line.player_id) continue;
+      if (!lineStake) continue;
 
-      const backed = line.player_id;
-      if (winnerIds.includes(backed)) {
+      // Per-player line
+      if (line.player_id) {
+        const backed = line.player_id;
+        if (winnerIds.includes(backed)) {
+          const winProfit = profit(lineStake, line.odds_num, line.odds_den);
+          const funders = players.filter((p) => p.user_id !== backed);
+          if (funders.length === 0) continue;
+          const eachPays = winProfit / funders.length;
+          for (const f of funders) {
+            deltas.set(f.user_id, (deltas.get(f.user_id) ?? 0) - eachPays);
+          }
+          deltas.set(backed, (deltas.get(backed) ?? 0) + winProfit);
+        } else {
+          deltas.set(backed, (deltas.get(backed) ?? 0) - lineStake);
+          const each = lineStake / winnerIds.length;
+          for (const w of winnerIds) {
+            deltas.set(w, (deltas.get(w) ?? 0) + each);
+          }
+        }
+        continue;
+      }
+
+      // Per-team / side line
+      if (!line.side_label) continue;
+      const side = line.side_label;
+      const backedPlayers = players.filter((p) => p.side_label === side);
+      const opposingPlayers = players.filter((p) => p.side_label !== side);
+      if (backedPlayers.length === 0 || opposingPlayers.length === 0) continue;
+
+      const sideWon = backedPlayers.some((p) =>
+        winnerIds.includes(p.user_id)
+      );
+
+      if (sideWon) {
         const winProfit = profit(lineStake, line.odds_num, line.odds_den);
-        const funders = players.filter((p) => p.user_id !== backed);
-        if (funders.length === 0) continue;
-        const eachPays = winProfit / funders.length;
-        for (const f of funders) {
+        const eachPays = winProfit / opposingPlayers.length;
+        const eachGets = winProfit / backedPlayers.length;
+        for (const f of opposingPlayers) {
           deltas.set(f.user_id, (deltas.get(f.user_id) ?? 0) - eachPays);
         }
-        deltas.set(backed, (deltas.get(backed) ?? 0) + winProfit);
+        for (const b of backedPlayers) {
+          deltas.set(b.user_id, (deltas.get(b.user_id) ?? 0) + eachGets);
+        }
       } else {
-        deltas.set(backed, (deltas.get(backed) ?? 0) - lineStake);
-        const each = lineStake / winnerIds.length;
-        for (const w of winnerIds) {
-          deltas.set(w, (deltas.get(w) ?? 0) + each);
+        const eachLoses = lineStake / backedPlayers.length;
+        const winnersOnOpposing = opposingPlayers.filter((p) =>
+          winnerIds.includes(p.user_id)
+        );
+        const receivers =
+          winnersOnOpposing.length > 0 ? winnersOnOpposing : opposingPlayers;
+        const eachGets = lineStake / receivers.length;
+        for (const b of backedPlayers) {
+          deltas.set(b.user_id, (deltas.get(b.user_id) ?? 0) - eachLoses);
+        }
+        for (const r of receivers) {
+          deltas.set(r.user_id, (deltas.get(r.user_id) ?? 0) + eachGets);
         }
       }
     }

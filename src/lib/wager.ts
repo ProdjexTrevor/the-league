@@ -10,10 +10,22 @@ export function payout(stake: number, oddsNum: number, oddsDen: number): number 
   return stake + (stake * oddsNum) / oddsDen;
 }
 
+/** Amount the opposing side puts up if this line hits (stake × num/den). */
 export function profit(stake: number, oddsNum: number, oddsDen: number): number {
   if (!stake || !oddsNum || !oddsDen) return 0;
   return (stake * oddsNum) / oddsDen;
 }
+
+/** Alias for UI copy: "at 2 to 1 on $10, opposite puts up $20". */
+export function liability(
+  stake: number,
+  oddsNum: number,
+  oddsDen: number
+): number {
+  return profit(stake, oddsNum, oddsDen);
+}
+
+export type OddsScope = "player" | "team";
 
 export type ScoringMode =
   | "higher_wins"

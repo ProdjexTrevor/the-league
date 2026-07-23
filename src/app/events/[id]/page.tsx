@@ -10,6 +10,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import {
   formatOdds,
+  liability,
   payout,
   scoringModeLabel,
   type ScoringMode,
@@ -188,10 +189,15 @@ export default async function EventPage({ params }: Props) {
         <section className="mt-10">
           <h2 className="text-lg font-semibold">Odds board</h2>
           <p className="mt-1 text-sm text-muted">
-            Fractional odds — e.g. 2 / 1 pays {formatOdds(2, 1)}. Stake{" "}
-            {event.default_stake_units} → payout{" "}
-            {payout(Number(event.default_stake_units) || 0, 2, 1).toFixed(0)} if
-            it hits.
+            Fractional odds set by the creator. Example: {formatOdds(2, 1)} on
+            stake {event.default_stake_units} means the other side puts up{" "}
+            {liability(
+              Number(event.default_stake_units) || 0,
+              2,
+              1
+            ).toFixed(0)}{" "}
+            if that line wins (full return{" "}
+            {payout(Number(event.default_stake_units) || 0, 2, 1).toFixed(0)}).
           </p>
           <ul className="mt-4 divide-y divide-line border-y border-line">
             {lines?.map((line) => (
@@ -207,6 +213,17 @@ export default async function EventPage({ params }: Props) {
                     {formatOdds(line.odds_num, line.odds_den)}
                   </span>{" "}
                   · stake {line.stake_units}
+                  {Number(line.stake_units) > 0 && (
+                    <span className="text-muted">
+                      {" "}
+                      · opposite puts up{" "}
+                      {liability(
+                        Number(line.stake_units),
+                        line.odds_num,
+                        line.odds_den
+                      ).toFixed(0)}
+                    </span>
+                  )}
                 </span>
                 {event.status !== "completed" && (
                   <form action={deleteLineAction}>
@@ -218,24 +235,29 @@ export default async function EventPage({ params }: Props) {
                 )}
               </li>
             ))}
+            {(lines?.length ?? 0) === 0 && (
+              <li className="py-3 text-sm text-muted">No lines yet.</li>
+            )}
           </ul>
           {event.status !== "completed" && (players?.length ?? 0) > 0 && (
             <form action={setLineAction} className="mt-4 grid gap-3 sm:grid-cols-4">
               <select
                 name="player_id"
-                required
                 defaultValue=""
                 className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:col-span-2"
               >
-                <option value="" disabled>
-                  Player
-                </option>
+                <option value="">Player (or use side below)</option>
                 {players?.map((p) => (
                   <option key={p.user_id} value={p.user_id}>
                     {nameById.get(p.user_id)}
                   </option>
                 ))}
               </select>
+              <input
+                name="side_label"
+                placeholder="Team / side label"
+                className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:col-span-2"
+              />
               <input
                 name="odds_num"
                 type="number"
@@ -265,7 +287,7 @@ export default async function EventPage({ params }: Props) {
                 type="submit"
                 className="rounded-sm border border-line px-4 py-2.5 text-sm hover:border-fg/40 sm:col-span-2"
               >
-                Add line ({formatOdds(2, 1)} style)
+                Add line
               </button>
             </form>
           )}
