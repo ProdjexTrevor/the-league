@@ -77,6 +77,7 @@ type EventPlayers = {
   entry_paid: boolean;
   units_paid: number;
   units_delta: number;
+  invite_status: string;
 };
 
 type WagerLines = {
@@ -215,6 +216,7 @@ export type Database = {
           entry_paid?: boolean;
           units_paid?: number;
           units_delta?: number;
+          invite_status?: string;
         };
         Update: Partial<EventPlayers>;
         Relationships: [];
@@ -370,6 +372,17 @@ export type Database = {
           p_bracket_size?: number | null;
         };
         Returns: Events;
+      };
+      accept_event_invite: {
+        Args: {
+          p_event_id: string;
+          p_wager_units?: number | null;
+        };
+        Returns: EventPlayers;
+      };
+      decline_event_invite: {
+        Args: { p_event_id: string };
+        Returns: EventPlayers;
       };
       record_event_obligations: {
         Args: { p_event_id: string };

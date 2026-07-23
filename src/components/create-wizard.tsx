@@ -15,6 +15,7 @@ export type CatalogOption = {
   name: string;
   scoring_mode: string;
   description: string | null;
+  slug?: string | null;
 };
 
 export type LeagueOption = {
@@ -27,7 +28,7 @@ export type UserOption = {
   display_name: string;
 };
 
-type Intent = "match" | "league" | "join" | null;
+type Intent = "match" | "bet" | "league" | "join" | null;
 type MatchKind = "game" | "tournament";
 
 type Props = {
@@ -38,7 +39,7 @@ type Props = {
   leagueMemberIds: Record<string, string[]>;
   currentUserId: string;
   lockedLeagueId?: string;
-  initialIntent?: "game" | "tournament" | "league";
+  initialIntent?: "game" | "tournament" | "league" | "bet";
   onCancelHref?: string;
 };
 
@@ -67,7 +68,11 @@ export function CreateWizard({
   const startsAsMatch =
     initialIntent === "game" || initialIntent === "tournament";
   const [intent, setIntent] = useState<Intent>(
-    startsAsMatch ? "match" : (initialIntent ?? null)
+    startsAsMatch
+      ? "match"
+      : initialIntent === "bet"
+        ? "bet"
+        : (initialIntent ?? null)
   );
   const [step, setStep] = useState(initialIntent ? 1 : 0);
   const [matchKind, setMatchKind] = useState<MatchKind>(
@@ -93,6 +98,7 @@ export function CreateWizard({
   const [playerWagers, setPlayerWagers] = useState<Record<string, string>>({});
   const [team1Wager, setTeam1Wager] = useState("10");
   const [team2Wager, setTeam2Wager] = useState("10");
+  const [myBetWager, setMyBetWager] = useState("10");
   const [format, setFormat] = useState("single_elim");
   const [bracketSize, setBracketSize] = useState("");
   const [notes, setNotes] = useState("");
@@ -104,6 +110,14 @@ export function CreateWizard({
   const [playerSearch, setPlayerSearch] = useState("");
 
   const [inviteCode, setInviteCode] = useState("");
+
+  const propositionCatalog = useMemo(
+    () =>
+      catalog.find((g) => g.slug === "proposition") ??
+      catalog.find((g) => g.name.toLowerCase().includes("proposition")) ??
+      null,
+    [catalog]
+  );
 
   const selectedGame = useMemo(
     () => catalog.find((g) => g.id === catalogId) ?? null,
@@ -132,6 +146,14 @@ export function CreateWizard({
     if (intent === "join") return ["What do you want to do?", "Invite code"];
     if (intent === "league") {
       return ["What do you want to do?", "League details", "Review"];
+    }
+    if (intent === "bet") {
+      return [
+        "What do you want to do?",
+        "Describe the bet",
+        "Who's in",
+        "Your wager",
+      ];
     }
     return [
       "What do you want to do?",
@@ -249,6 +271,28 @@ export function CreateWizard({
         return;
       }
     }
+    if (intent === "bet") {
+      if (step === 1) {
+        if (!propositionCatalog) {
+          setError(
+            "Proposition bet catalog is missing. Run the bets SQL migration."
+          );
+          return;
+        }
+        if (!title.trim()) {
+          setError("Add a title for this bet.");
+          return;
+        }
+        if (!notes.trim()) {
+          setError("Describe the bet so the other side knows the terms.");
+          return;
+        }
+      }
+      if (step === 2 && selectedPlayerIds.length < 2) {
+        setError("Invite at least one other player.");
+        return;
+      }
+    }
     if (intent === "join" && step === 1 && !inviteCode.trim()) {
       setError("Enter an invite code.");
       return;
@@ -280,6 +324,37 @@ export function CreateWizard({
         if (intent === "join") {
           fd.set("code", inviteCode.trim());
           await joinLeague(fd);
+          return;
+        }
+        if (intent === "bet") {
+          if (!propositionCatalog) {
+            setError(
+              "Proposition bet catalog is missing. Run the bets SQL migration."
+            );
+            return;
+          }
+          if (selectedPlayerIds.length < 2) {
+            setError("Invite at least one other player.");
+            return;
+          }
+          if (!(Number(myBetWager) > 0)) {
+            setError("Enter how much money you are wagering.");
+            return;
+          }
+          fd.set("kind", "bet");
+          fd.set("title", title.trim());
+          fd.set("catalog_id", propositionCatalog.id);
+          if (leagueId) fd.set("league_id", leagueId);
+          fd.set("entry_fee", "0");
+          fd.set("wager_mode", "custom");
+          fd.set("wager_scope", "player");
+          fd.set("stake", myBetWager || "0");
+          fd.set("notes", notes.trim());
+          for (const id of selectedPlayerIds) {
+            fd.append("player_id", id);
+          }
+          fd.set(`wager_player_${currentUserId}`, myBetWager);
+          await createEvent(fd);
           return;
         }
         if (intent === "match") {
@@ -334,7 +409,8 @@ export function CreateWizard({
   const isLast =
     (intent === "join" && step === 1) ||
     (intent === "league" && step === 2) ||
-    (intent === "match" && step === 3);
+    (intent === "match" && step === 3) ||
+    (intent === "bet" && step === 3);
 
   const playerNames = selectedPlayerIds
     .map((id) => users.find((u) => u.id === id)?.display_name ?? "Player")
@@ -375,7 +451,12 @@ export function CreateWizard({
                 [
                   "match",
                   "Start a game",
-                  "Pick a game, players, and an optional stake",
+                  "Pick a game, invite players, and an optional stake",
+                ],
+                [
+                  "bet",
+                  "Make a bet",
+                  "Describe the terms; each side enters their own wager",
                 ],
                 ["league", "Create a league", "Friend group with an invite code"],
                 ["join", "Join a league", "Enter an invite code"],
@@ -467,12 +548,14 @@ export function CreateWizard({
         {intent === "match" && step === 1 && (
           <div className="animate-rise space-y-5">
             <div className="max-h-[240px] space-y-2 overflow-y-auto pr-1">
-              {catalog.length === 0 ? (
+              {catalog.filter((g) => g.slug !== "proposition").length === 0 ? (
                 <p className="text-sm text-danger">
                   Catalog is empty. Run the competitions SQL migration first.
                 </p>
               ) : (
-                catalog.map((g) => (
+                catalog
+                  .filter((g) => g.slug !== "proposition")
+                  .map((g) => (
                   <button
                     key={g.id}
                     type="button"
@@ -603,10 +686,63 @@ export function CreateWizard({
           </div>
         )}
 
-        {intent === "match" && step === 2 && (
+        {intent === "bet" && step === 1 && (
+          <div className="animate-rise space-y-4">
+            {!propositionCatalog && (
+              <p className="text-sm text-danger">
+                Proposition bet catalog is missing. Run the bets SQL migration
+                on League Supabase.
+              </p>
+            )}
+            <label className="block">
+              <span className={labelClass}>Title</span>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className={inputClass}
+                placeholder="Lakers cover the spread"
+                autoFocus
+              />
+            </label>
+            <label className="block">
+              <span className={labelClass}>What is the bet?</span>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={4}
+                className={inputClass}
+                placeholder="Explain the terms clearly — what each side is taking, and how you settle."
+              />
+            </label>
+            {!lockedLeagueId && leagues.length > 0 && (
+              <label className="block">
+                <span className={labelClass}>League (optional)</span>
+                <select
+                  value={leagueId}
+                  onChange={(e) => {
+                    setLeagueId(e.target.value);
+                    setSelectedPlayerIds([currentUserId]);
+                  }}
+                  className={inputClass}
+                >
+                  <option value="">Standalone</option>
+                  {leagues.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+        )}
+
+        {(intent === "match" || intent === "bet") && step === 2 && (
           <div className="animate-rise space-y-4">
             <p className="text-sm text-muted">
-              Tap everyone in this {matchKind}. You are always included.
+              {intent === "bet"
+                ? "Invite who takes the other side. They must accept before the bet is on."
+                : `Invite everyone in this ${matchKind}. They must accept before they are in. You are always included.`}
             </p>
             <input
               value={playerSearch}
@@ -660,6 +796,37 @@ export function CreateWizard({
             <p className="text-sm text-muted">
               Selected: {selectedPlayerIds.length}
             </p>
+          </div>
+        )}
+
+        {intent === "bet" && step === 3 && (
+          <div className="animate-rise space-y-5">
+            <p className="text-sm text-muted">
+              Enter your stake. The other side enters theirs when they accept
+              the invite.
+            </p>
+            <label className="block">
+              <span className={labelClass}>Your wager (money)</span>
+              <input
+                type="number"
+                min={0}
+                step="any"
+                value={myBetWager}
+                onChange={(e) => setMyBetWager(e.target.value)}
+                className={inputClass}
+                autoFocus
+              />
+            </label>
+            <Review
+              rows={[
+                ["Type", "Bet"],
+                ["Title", title],
+                ["Terms", notes],
+                ["League", leagueLabel],
+                ["Players", playerNames],
+                ["Your wager", `${myBetWager || 0} money`],
+              ]}
+            />
           </div>
         )}
 
@@ -973,9 +1140,11 @@ export function CreateWizard({
                 ? "Join league"
                 : intent === "league"
                   ? "Create league"
-                  : matchKind === "tournament"
-                    ? "Start tournament"
-                    : "Start game"}
+                  : intent === "bet"
+                    ? "Send bet invite"
+                    : matchKind === "tournament"
+                      ? "Send invites"
+                      : "Send invites"}
           </button>
         )}
       </div>

@@ -40,7 +40,20 @@ export type ScoringMode =
 
 export type WagerMode = "none" | "pot" | "custom" | "odds";
 
-export type EventKind = "game" | "tournament";
+export type EventKind = "game" | "tournament" | "bet";
+
+export function eventKindLabel(kind: string): string {
+  switch (kind) {
+    case "game":
+      return "Game";
+    case "tournament":
+      return "Tournament";
+    case "bet":
+      return "Bet";
+    default:
+      return kind;
+  }
+}
 
 export function scoringModeLabel(mode: ScoringMode): string {
   switch (mode) {

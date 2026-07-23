@@ -2,7 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { signOut } from "@/app/actions";
+import { EventsList } from "@/components/events-list";
 import { createClient } from "@/lib/supabase/server";
+import { eventKindLabel } from "@/lib/wager";
 
 export const dynamic = "force-dynamic";
 
@@ -34,16 +36,16 @@ export default async function AppPage() {
       )
       .eq("created_by", user.id)
       .order("created_at", { ascending: false })
-      .limit(20),
+      .limit(40),
   ]);
 
   const { data: playing } = await supabase
     .from("event_players")
     .select(
-      "event_id, events(id, title, kind, status, entry_fee_units, wager_mode, created_at, league_id)"
+      "event_id, invite_status, events(id, title, kind, status, entry_fee_units, wager_mode, created_at, league_id)"
     )
     .eq("user_id", user.id)
-    .limit(30);
+    .limit(50);
 
   const eventMap = new Map<string, NonNullable<(typeof myEvents)>[number]>();
   myEvents?.forEach((e) => eventMap.set(e.id, e));
@@ -54,6 +56,15 @@ export default async function AppPage() {
   const events = Array.from(eventMap.values()).sort(
     (a, b) => +new Date(b.created_at) - +new Date(a.created_at)
   );
+
+  const pendingInvites =
+    playing
+      ?.filter((row) => row.invite_status === "pending")
+      .map((row) => {
+        const e = Array.isArray(row.events) ? row.events[0] : row.events;
+        return e;
+      })
+      .filter(Boolean) ?? [];
 
   const leagues =
     memberships
@@ -90,48 +101,56 @@ export default async function AppPage() {
         </nav>
       </header>
 
-      <div className="mt-10">
+      <div className="mt-10 flex flex-wrap gap-3">
         <Link
           href="/create"
           className="inline-flex rounded-sm bg-accent px-5 py-3 text-sm font-semibold text-accent-ink transition hover:brightness-110"
         >
           Start something
         </Link>
+        <Link
+          href="/create?kind=bet"
+          className="inline-flex rounded-sm border border-line px-5 py-3 text-sm font-semibold text-fg transition hover:border-fg/40"
+        >
+          Make a bet
+        </Link>
       </div>
+
+      {pendingInvites.length > 0 && (
+        <section className="mt-14">
+          <h2 className="text-lg font-semibold">Invites waiting</h2>
+          <ul className="mt-4 divide-y divide-line border-y border-line">
+            {pendingInvites.map((event) =>
+              event ? (
+                <li key={event.id}>
+                  <Link
+                    href={`/events/${event.id}`}
+                    className="flex items-start justify-between gap-3 py-4 transition hover:bg-fg/[0.03] sm:items-center sm:gap-4"
+                  >
+                    <div className="min-w-0">
+                      <p className="break-words font-medium">{event.title}</p>
+                      <p className="mt-0.5 text-sm text-muted">
+                        {eventKindLabel(event.kind)} · accept to join
+                      </p>
+                    </div>
+                    <span className="shrink-0 pt-0.5 text-xs uppercase tracking-wider text-accent sm:pt-0">
+                      Pending
+                    </span>
+                  </Link>
+                </li>
+              ) : null
+            )}
+          </ul>
+        </section>
+      )}
 
       <section className="mt-14">
         <h2 className="text-lg font-semibold">Your events</h2>
-        {events.length === 0 ? (
-          <p className="mt-3 text-sm text-muted">
-            No games or tournaments yet.{" "}
-            <Link href="/create" className="text-accent hover:underline">
-              Start one
-            </Link>
-            .
-          </p>
-        ) : (
-          <ul className="mt-4 divide-y divide-line border-y border-line">
-            {events.map((event) => (
-              <li key={event.id}>
-                <Link
-                  href={`/events/${event.id}`}
-                  className="flex items-start justify-between gap-3 py-4 transition hover:bg-fg/[0.03] sm:items-center sm:gap-4"
-                >
-                  <div className="min-w-0">
-                    <p className="break-words font-medium">{event.title}</p>
-                    <p className="mt-0.5 text-sm text-muted">
-                      {event.kind} · {event.wager_mode} · entry{" "}
-                      {event.entry_fee_units}
-                    </p>
-                  </div>
-                  <span className="shrink-0 pt-0.5 text-xs uppercase tracking-wider text-muted sm:pt-0">
-                    {event.status}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+        <EventsList
+          events={events}
+          emptyMessage="No games, bets, or tournaments yet."
+          emptyHref="/create"
+        />
       </section>
 
       <section className="mt-14">

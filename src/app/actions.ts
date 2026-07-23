@@ -199,7 +199,12 @@ export async function createEvent(formData: FormData) {
   const bracketSize = bracketSizeRaw ? Number(bracketSizeRaw) : null;
 
   if (!title || !catalogId) fail("Title and game are required.");
-  if (kind !== "game" && kind !== "tournament") fail("Invalid event kind.");
+  if (kind !== "game" && kind !== "tournament" && kind !== "bet") {
+    fail("Invalid event kind.");
+  }
+  if (kind === "bet" && !notes) {
+    fail("Describe the bet so everyone knows what they are taking.");
+  }
 
   const playerIds = [
     ...new Set(
@@ -236,7 +241,7 @@ export async function createEvent(formData: FormData) {
 
   if (error || !data) fail(error?.message ?? "Could not create event.");
 
-  // Creator is already inserted by create_event RPC; add the rest
+  // Creator is already inserted (accepted) by create_event RPC; invite the rest
   const entry = Number(data.entry_fee_units) || 0;
   const wagerScope = String(
     formData.get("wager_scope") ?? formData.get("odds_scope") ?? "player"
@@ -275,11 +280,14 @@ export async function createEvent(formData: FormData) {
       side_label: sideLabel,
       entry_paid: entry > 0,
       units_paid: entry,
+      invite_status: "pending",
     });
     if (playerError) fail(playerError.message);
   }
 
   // Custom wagers: each player or team puts up an explicit money amount
+  // For player-scope bets/games, only store the creator's stake at create time;
+  // invitees enter theirs when they accept.
   if (wagerMode === "custom") {
     let linesCreated = 0;
 
@@ -305,6 +313,20 @@ export async function createEvent(formData: FormData) {
           linesCreated += 1;
         }
       }
+    } else if (kind === "bet") {
+      const amount = Number(formData.get(`wager_player_${user.id}`) ?? 0);
+      if (!(amount > 0)) {
+        fail("Enter how much money you are wagering.");
+      }
+      const { error: lineError } = await supabase.from("wager_lines").insert({
+        event_id: data.id,
+        player_id: user.id,
+        odds_num: 1,
+        odds_den: 1,
+        stake_units: amount,
+      });
+      if (lineError) fail(lineError.message);
+      linesCreated += 1;
     } else {
       for (const playerId of playerIds) {
         const amount = Number(formData.get(`wager_player_${playerId}`) ?? 0);
@@ -383,6 +405,59 @@ export async function createEvent(formData: FormData) {
   redirect(`/events/${data.id}`);
 }
 
+export async function acceptEventInvite(eventId: string, formData: FormData) {
+  const wagerRaw = String(formData.get("wager_units") ?? "").trim();
+  const wagerUnits = wagerRaw === "" ? null : Number(wagerRaw);
+  if (wagerRaw !== "" && !(Number.isFinite(wagerUnits) && (wagerUnits as number) > 0)) {
+    fail("Enter how much money you are wagering.");
+  }
+
+  const { supabase } = await ensureProfile();
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, league_id, kind, wager_mode")
+    .eq("id", eventId)
+    .single();
+  if (!event) fail("Event not found.");
+
+  if (
+    event.kind === "bet" &&
+    event.wager_mode === "custom" &&
+    (wagerUnits == null || !(wagerUnits > 0))
+  ) {
+    fail("Enter how much money you are wagering to accept this bet.");
+  }
+
+  const { error } = await supabase.rpc("accept_event_invite", {
+    p_event_id: eventId,
+    p_wager_units: wagerUnits,
+  });
+  if (error) fail(error.message);
+
+  revalidatePath(`/events/${eventId}`);
+  revalidatePath("/app");
+  if (event.league_id) revalidatePath(`/leagues/${event.league_id}`);
+}
+
+export async function declineEventInvite(eventId: string) {
+  const { supabase } = await ensureProfile();
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, league_id")
+    .eq("id", eventId)
+    .single();
+  if (!event) fail("Event not found.");
+
+  const { error } = await supabase.rpc("decline_event_invite", {
+    p_event_id: eventId,
+  });
+  if (error) fail(error.message);
+
+  revalidatePath(`/events/${eventId}`);
+  revalidatePath("/app");
+  if (event.league_id) revalidatePath(`/leagues/${event.league_id}`);
+}
+
 export async function addPlayerToEvent(eventId: string, formData: FormData) {
   const userId = String(formData.get("user_id") ?? "");
   const sideLabel = String(formData.get("side_label") ?? "").trim();
@@ -403,6 +478,7 @@ export async function addPlayerToEvent(eventId: string, formData: FormData) {
     side_label: sideLabel || null,
     entry_paid: Number(event.entry_fee_units) > 0,
     units_paid: Number(event.entry_fee_units) || 0,
+    invite_status: "pending",
   });
 
   if (error) fail(error.message);
@@ -475,12 +551,22 @@ export async function settleEvent(eventId: string, formData: FormData) {
 
   const scoringMode = (catalog?.scoring_mode ?? "placement") as ScoringMode;
 
-  const { data: players } = await supabase
+  const { data: allPlayers } = await supabase
     .from("event_players")
-    .select("user_id, side_label")
+    .select("user_id, side_label, invite_status")
     .eq("event_id", eventId);
 
-  if (!players?.length) fail("Add players before settling.");
+  const players = (allPlayers ?? []).filter(
+    (p) => (p.invite_status ?? "accepted") === "accepted"
+  );
+
+  if (!players.length) fail("Wait for players to accept before settling.");
+  const pending = (allPlayers ?? []).filter(
+    (p) => p.invite_status === "pending"
+  );
+  if (pending.length > 0) {
+    fail("Everyone invited must accept (or decline) before settling.");
+  }
 
   type ResultRow = {
     user_id: string;

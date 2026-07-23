@@ -26,7 +26,7 @@ export default async function CreatePage({ searchParams }: Props) {
         .eq("user_id", user.id),
       supabase
         .from("game_catalog")
-        .select("id, name, scoring_mode, description")
+        .select("id, name, scoring_mode, description, slug")
         .eq("is_active", true)
         .order("sort_order"),
       supabase
@@ -70,8 +70,9 @@ export default async function CreatePage({ searchParams }: Props) {
   const initialKind =
     params.kind === "game" ||
     params.kind === "tournament" ||
-    params.kind === "league"
-      ? (params.kind as "game" | "tournament" | "league")
+    params.kind === "league" ||
+    params.kind === "bet"
+      ? (params.kind as "game" | "tournament" | "league" | "bet")
       : undefined;
 
   const cancelHref = lockedLeagueId ? `/leagues/${lockedLeagueId}` : "/app";
@@ -83,7 +84,13 @@ export default async function CreatePage({ searchParams }: Props) {
       </Link>
       <div className="mt-12">
         <CreateWizard
-          catalog={catalog ?? []}
+          catalog={(catalog ?? []).map((g) => ({
+            id: g.id,
+            name: g.name,
+            scoring_mode: g.scoring_mode,
+            description: g.description,
+            slug: g.slug,
+          }))}
           leagues={leagues as { id: string; name: string }[]}
           users={(profiles ?? []).map((p) => ({
             id: p.id,

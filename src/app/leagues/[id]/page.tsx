@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { EventsList } from "@/components/events-list";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -70,12 +71,18 @@ export default async function LeaguePage({ params }: Props) {
             <span>· season entry {league.default_entry_fee_units}</span>
           )}
         </p>
-        <div className="mt-6">
+        <div className="mt-6 flex flex-wrap gap-3">
           <Link
             href={`/create?league=${id}&kind=game`}
             className="inline-flex rounded-sm bg-accent px-4 py-2.5 text-sm font-semibold text-accent-ink hover:brightness-110"
           >
             Start a game
+          </Link>
+          <Link
+            href={`/create?league=${id}&kind=bet`}
+            className="inline-flex rounded-sm border border-line px-4 py-2.5 text-sm font-semibold text-fg hover:border-fg/40"
+          >
+            Make a bet
           </Link>
         </div>
       </header>
@@ -146,31 +153,12 @@ export default async function LeaguePage({ params }: Props) {
 
       <section className="mt-12">
         <h2 className="text-lg font-semibold">Events</h2>
-        {!events?.length ? (
-          <p className="mt-3 text-sm text-muted">No games or tournaments yet.</p>
-        ) : (
-          <ul className="mt-4 divide-y divide-line border-y border-line">
-            {events.map((event) => (
-              <li key={event.id}>
-                <Link
-                  href={`/events/${event.id}`}
-                  className="flex items-start justify-between gap-3 py-4 transition hover:bg-fg/[0.03] sm:items-center sm:gap-4"
-                >
-                  <div className="min-w-0">
-                    <p className="break-words font-medium">{event.title}</p>
-                    <p className="mt-0.5 text-sm text-muted">
-                      {event.kind} · {event.wager_mode} · entry{" "}
-                      {event.entry_fee_units}
-                    </p>
-                  </div>
-                  <span className="shrink-0 pt-0.5 text-xs uppercase tracking-wider text-muted sm:pt-0">
-                    {event.status}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+        <EventsList
+          events={events ?? []}
+          emptyMessage="No games, bets, or tournaments yet."
+          emptyHref={`/create?league=${id}&kind=game`}
+          emptyLinkLabel="Start one"
+        />
       </section>
     </main>
   );
