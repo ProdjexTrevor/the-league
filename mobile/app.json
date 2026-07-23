@@ -40,10 +40,11 @@
       "typedRoutes": true
     },
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": ""
+        "projectId": "ba0a3aca-b3ec-4261-afac-7f37e1d78188"
       }
     },
-    "owner": ""
+    "owner": "grindadmin"
   }
 }

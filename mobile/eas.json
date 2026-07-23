@@ -9,7 +9,7 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal",
+      "distribution": "store",
       "ios": {
         "simulator": false
       }
@@ -19,10 +19,6 @@
     }
   },
   "submit": {
-    "production": {
-      "ios": {
-        "ascAppId": ""
-      }
-    }
+    "production": {}
   }
 }
