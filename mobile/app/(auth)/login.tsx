@@ -1,6 +1,13 @@
 import { Link } from "expo-router";
 import { useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text } from "react-native";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 
 import {
   BrandTitle,
@@ -17,12 +24,20 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function onSubmit() {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setError(null);
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     setLoading(false);
-    if (error) Alert.alert("Sign in failed", error.message);
+    if (signInError) {
+      setError(signInError.message);
+      Alert.alert("Sign in failed", signInError.message);
+    }
   }
 
   return (
@@ -31,8 +46,18 @@ export default function LoginScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
-        <ScrollView keyboardShouldPersistTaps="handled">
-          <BrandTitle />
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            paddingVertical: 24,
+            maxWidth: 420,
+            width: "100%",
+            alignSelf: "center",
+          }}
+        >
+          <BrandTitle size="lg" />
           <Heading>Log in</Heading>
           <Muted>Pick up where your standings left off.</Muted>
           <Field
@@ -48,16 +73,32 @@ export default function LoginScreen() {
             value={password}
             onChangeText={setPassword}
           />
+          {error ? (
+            <Text
+              style={{
+                color: colors.danger,
+                marginTop: 12,
+                fontFamily: "DMSans_400Regular",
+                fontSize: 14,
+              }}
+            >
+              {error}
+            </Text>
+          ) : null}
           <PrimaryButton
             label={loading ? "Signing in…" : "Log in"}
             onPress={onSubmit}
             disabled={loading || !email || !password}
+            style={{ marginTop: 24, alignSelf: "stretch" }}
           />
-          <Link href="/(auth)/signup" style={{ marginTop: 24 }}>
-            <Text style={{ color: colors.accent, fontFamily: "DMSans_400Regular" }}>
-              Create an account
-            </Text>
-          </Link>
+          <View style={{ marginTop: 24 }}>
+            <Link href="/(auth)/signup">
+              <Text style={{ color: colors.muted, fontFamily: "DMSans_400Regular", fontSize: 14 }}>
+                New here?{" "}
+                <Text style={{ color: colors.accent }}>Create an account</Text>
+              </Text>
+            </Link>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>

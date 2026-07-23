@@ -1,6 +1,13 @@
 import { Link, useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text } from "react-native";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 
 import {
   BrandTitle,
@@ -44,7 +51,6 @@ export default function SignupScreen() {
       Alert.alert("Sign up failed", error.message);
       return;
     }
-    Alert.alert("Welcome", "Account created. You’re in.");
     router.replace("/(tabs)/home");
   }
 
@@ -54,8 +60,18 @@ export default function SignupScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
-        <ScrollView keyboardShouldPersistTaps="handled">
-          <BrandTitle />
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            paddingVertical: 24,
+            maxWidth: 420,
+            width: "100%",
+            alignSelf: "center",
+          }}
+        >
+          <BrandTitle size="lg" />
           <Heading>Join the crew</Heading>
           <Muted>Friendly wagers. Real standings. Your Venmo for payouts.</Muted>
           <Field label="Display name" value={displayName} onChangeText={setDisplayName} />
@@ -83,12 +99,16 @@ export default function SignupScreen() {
             label={loading ? "Creating…" : "Create account"}
             onPress={onSubmit}
             disabled={loading}
+            style={{ marginTop: 24, alignSelf: "stretch" }}
           />
-          <Link href="/(auth)/login" style={{ marginTop: 24 }}>
-            <Text style={{ color: colors.accent, fontFamily: "DMSans_400Regular" }}>
-              Already have an account?
-            </Text>
-          </Link>
+          <View style={{ marginTop: 24 }}>
+            <Link href="/(auth)/login">
+              <Text style={{ color: colors.muted, fontFamily: "DMSans_400Regular", fontSize: 14 }}>
+                Already have an account?{" "}
+                <Text style={{ color: colors.accent }}>Log in</Text>
+              </Text>
+            </Link>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>

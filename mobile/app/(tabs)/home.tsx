@@ -1,16 +1,33 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 
-import { BrandTitle, Card, Heading, Muted, Screen } from "@/components/ui";
+import {
+  BrandTitle,
+  ListRow,
+  ListSection,
+  Muted,
+  PrimaryButton,
+  Screen,
+  SecondaryButton,
+  SectionTitle,
+} from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
-import { colors, spacing } from "@/lib/theme";
+import { colors, eventKindLabel, spacing } from "@/lib/theme";
 
 type LeagueRow = {
   id: string;
   name: string;
+  description: string | null;
   invite_code: string;
+  role?: string;
 };
 
 type EventRow = {
@@ -18,7 +35,9 @@ type EventRow = {
   title: string;
   status: string;
   kind: string;
-  starts_at: string | null;
+  created_at: string;
+  entry_fee_units?: number | null;
+  wager_mode?: string | null;
 };
 
 export default function HomeScreen() {
@@ -27,45 +46,67 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [leagues, setLeagues] = useState<LeagueRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
+  const [pending, setPending] = useState<EventRow[]>([]);
   const [displayName, setDisplayName] = useState("");
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
 
-    const [{ data: profile }, { data: memberships }, { data: eventPlayers }] =
+    const [{ data: profile }, { data: memberships }, { data: myEvents }, { data: playing }] =
       await Promise.all([
         supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
-        supabase.from("league_members").select("league_id, leagues(id, name, invite_code)").eq("user_id", user.id),
+        supabase
+          .from("league_members")
+          .select("role, leagues(id, name, description, invite_code)")
+          .eq("user_id", user.id)
+          .order("joined_at", { ascending: false }),
+        supabase
+          .from("events")
+          .select("id, title, kind, status, entry_fee_units, wager_mode, created_at")
+          .eq("created_by", user.id)
+          .order("created_at", { ascending: false })
+          .limit(40),
         supabase
           .from("event_players")
-          .select("event_id, events(id, title, status, kind, starts_at)")
+          .select(
+            "invite_status, events(id, title, kind, status, entry_fee_units, wager_mode, created_at)"
+          )
           .eq("user_id", user.id)
-          .eq("invite_status", "accepted"),
+          .limit(50),
       ]);
 
-    setDisplayName(profile?.display_name ?? user.email ?? "Player");
+    setDisplayName(profile?.display_name ?? "player");
 
     const leagueList = (memberships ?? [])
-      .map((m: { leagues: LeagueRow | LeagueRow[] | null }) => {
+      .map((m: { role: string; leagues: LeagueRow | LeagueRow[] | null }) => {
         const l = Array.isArray(m.leagues) ? m.leagues[0] : m.leagues;
-        return l;
+        if (!l) return null;
+        return { ...l, role: m.role };
       })
       .filter(Boolean) as LeagueRow[];
     setLeagues(leagueList);
 
-    const eventList = (eventPlayers ?? [])
-      .map((row: { events: EventRow | EventRow[] | null }) => {
+    const eventMap = new Map<string, EventRow>();
+    (myEvents ?? []).forEach((e) => eventMap.set(e.id, e as EventRow));
+    const pendingList: EventRow[] = [];
+    (playing ?? []).forEach(
+      (row: {
+        invite_status: string;
+        events: EventRow | EventRow[] | null;
+      }) => {
         const e = Array.isArray(row.events) ? row.events[0] : row.events;
-        return e;
-      })
-      .filter(Boolean) as EventRow[];
-    eventList.sort((a, b) => {
-      const at = a.starts_at ? new Date(a.starts_at).getTime() : 0;
-      const bt = b.starts_at ? new Date(b.starts_at).getTime() : 0;
-      return bt - at;
-    });
-    setEvents(eventList.slice(0, 12));
+        if (!e) return;
+        if (row.invite_status === "pending") pendingList.push(e);
+        eventMap.set(e.id, e);
+      }
+    );
+    setPending(pendingList);
+    setEvents(
+      Array.from(eventMap.values()).sort(
+        (a, b) => +new Date(b.created_at) - +new Date(a.created_at)
+      )
+    );
     setLoading(false);
   }, [user]);
 
@@ -76,54 +117,129 @@ export default function HomeScreen() {
   );
 
   return (
-    <Screen style={{ paddingTop: spacing.xl + 8 }}>
-      <ScrollView>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <BrandTitle />
-          <Pressable onPress={() => void signOut()}>
-            <Text style={{ color: colors.muted, fontFamily: "DMSans_400Regular" }}>Sign out</Text>
-          </Pressable>
+    <Screen>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: 12,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <BrandTitle size="md" />
+            <Muted>Hey {displayName}</Muted>
+          </View>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 16, justifyContent: "flex-end" }}>
+            <Pressable onPress={() => router.push("/(tabs)/wallet")}>
+              <Text style={navLink}>Wallet</Text>
+            </Pressable>
+            <Pressable onPress={() => void signOut()}>
+              <Text style={navLink}>Sign out</Text>
+            </Pressable>
+          </View>
         </View>
-        <Muted>Hey {displayName}. Your crew’s on the board.</Muted>
+
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 40 }}>
+          <PrimaryButton
+            label="Start something"
+            onPress={() => router.push("/(tabs)/create")}
+            style={{ marginTop: 0 }}
+          />
+          <SecondaryButton
+            label="Make a bet"
+            onPress={() => router.push("/(tabs)/create")}
+          />
+        </View>
 
         {loading ? (
-          <ActivityIndicator color={colors.accent} style={{ marginTop: 32 }} />
+          <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
         ) : (
           <>
-            <Heading>Leagues</Heading>
-            {leagues.length === 0 ? (
-              <Muted>No leagues yet — create one or join with a code.</Muted>
+            {pending.length > 0 ? (
+              <>
+                <SectionTitle>Invites waiting</SectionTitle>
+                <ListSection>
+                  {pending.map((event, i) => (
+                    <ListRow
+                      key={event.id}
+                      title={event.title}
+                      subtitle={`${eventKindLabel(event.kind)} · accept to join`}
+                      meta="Pending"
+                      metaAccent
+                      onPress={() => router.push(`/event/${event.id}`)}
+                      isFirst={i === 0}
+                      isLast={i === pending.length - 1}
+                    />
+                  ))}
+                </ListSection>
+              </>
+            ) : null}
+
+            <SectionTitle>Your events</SectionTitle>
+            {events.length === 0 ? (
+              <Muted>
+                No games, bets, or tournaments yet.{" "}
+                <Text
+                  style={{ color: colors.accent }}
+                  onPress={() => router.push("/(tabs)/create")}
+                >
+                  Start one
+                </Text>
+              </Muted>
             ) : (
-              leagues.map((league) => (
-                <Card key={league.id} onPress={() => router.push(`/league/${league.id}`)}>
-                  <Text style={{ color: colors.fg, fontFamily: "DMSans_700Bold", fontSize: 16 }}>
-                    {league.name}
-                  </Text>
-                  <Text style={{ color: colors.muted, marginTop: 4, fontFamily: "DMSans_400Regular" }}>
-                    Code {league.invite_code}
-                  </Text>
-                </Card>
-              ))
+              <ListSection>
+                {events.slice(0, 20).map((event, i) => (
+                  <ListRow
+                    key={event.id}
+                    title={event.title}
+                    subtitle={`${eventKindLabel(event.kind)} · ${event.status}`}
+                    onPress={() => router.push(`/event/${event.id}`)}
+                    isFirst={i === 0}
+                    isLast={i === Math.min(events.length, 20) - 1}
+                  />
+                ))}
+              </ListSection>
             )}
 
-            <Heading>Recent events</Heading>
-            {events.length === 0 ? (
-              <Muted>No games yet. Hit Create to start one.</Muted>
+            <SectionTitle>Your leagues</SectionTitle>
+            {leagues.length === 0 ? (
+              <Muted>
+                No leagues yet.{" "}
+                <Text
+                  style={{ color: colors.accent }}
+                  onPress={() => router.push("/(tabs)/create")}
+                >
+                  Create or join
+                </Text>
+                .
+              </Muted>
             ) : (
-              events.map((event) => (
-                <Card key={event.id} onPress={() => router.push(`/event/${event.id}`)}>
-                  <Text style={{ color: colors.fg, fontFamily: "DMSans_700Bold", fontSize: 16 }}>
-                    {event.title}
-                  </Text>
-                  <Text style={{ color: colors.muted, marginTop: 4, fontFamily: "DMSans_400Regular" }}>
-                    {event.kind} · {event.status}
-                  </Text>
-                </Card>
-              ))
+              <ListSection>
+                {leagues.map((league, i) => (
+                  <ListRow
+                    key={league.id}
+                    title={league.name}
+                    subtitle={league.description ?? undefined}
+                    meta={league.role}
+                    onPress={() => router.push(`/league/${league.id}`)}
+                    isFirst={i === 0}
+                    isLast={i === leagues.length - 1}
+                  />
+                ))}
+              </ListSection>
             )}
+            <View style={{ height: spacing.xl }} />
           </>
         )}
       </ScrollView>
     </Screen>
   );
 }
+
+const navLink = {
+  fontFamily: "DMSans_400Regular" as const,
+  fontSize: 14,
+  color: colors.muted,
+};

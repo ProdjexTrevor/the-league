@@ -1,6 +1,7 @@
 import { BebasNeue_400Regular } from "@expo-google-fonts/bebas-neue";
 import {
   DMSans_400Regular,
+  DMSans_500Medium,
   DMSans_700Bold,
   useFonts,
 } from "@expo-google-fonts/dm-sans";
@@ -50,6 +51,7 @@ export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     BebasNeue_400Regular,
     DMSans_400Regular,
+    DMSans_500Medium,
     DMSans_700Bold,
   });
 
@@ -73,7 +75,12 @@ export default function RootLayout() {
       <AuthProvider>
         <StatusBar style="light" />
         <AuthGate>
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }} />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: colors.bg },
+            }}
+          />
         </AuthGate>
       </AuthProvider>
     </GestureHandlerRootView>

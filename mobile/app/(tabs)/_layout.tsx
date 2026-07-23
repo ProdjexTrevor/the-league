@@ -7,8 +7,8 @@ function TabLabel({ label, focused }: { label: string; focused: boolean }) {
   return (
     <Text
       style={{
-        fontFamily: "DMSans_700Bold",
-        fontSize: 11,
+        fontFamily: focused ? "DMSans_700Bold" : "DMSans_400Regular",
+        fontSize: 12,
         color: focused ? colors.accent : colors.muted,
       }}
     >
@@ -23,8 +23,11 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: colors.elevated,
+          backgroundColor: colors.bg,
           borderTopColor: colors.line,
+          borderTopWidth: 1,
+          height: 56,
+          paddingTop: 6,
         },
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.muted,

@@ -2,9 +2,15 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text } from "react-native";
 
-import { Card, Heading, Muted, Screen } from "@/components/ui";
+import {
+  ListRow,
+  ListSection,
+  Muted,
+  Screen,
+  SectionTitle,
+} from "@/components/ui";
 import { supabase } from "@/lib/supabase";
-import { colors, spacing } from "@/lib/theme";
+import { colors, eventKindLabel, spacing } from "@/lib/theme";
 import { formatMoney } from "@/lib/venmo";
 
 export default function EventDetailScreen() {
@@ -50,7 +56,10 @@ export default function EventDetailScreen() {
         (p: {
           invite_status: string;
           units_delta: number | null;
-          profiles: { display_name: string | null } | { display_name: string | null }[] | null;
+          profiles:
+            | { display_name: string | null }
+            | { display_name: string | null }[]
+            | null;
         }) => {
           const profile = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles;
           return {
@@ -69,38 +78,54 @@ export default function EventDetailScreen() {
   }, [load]);
 
   return (
-    <Screen style={{ paddingTop: spacing.xl }}>
+    <Screen>
       <Pressable onPress={() => router.back()}>
-        <Text style={{ color: colors.accent, fontFamily: "DMSans_700Bold" }}>← Back</Text>
+        <Text style={{ color: colors.muted, fontFamily: "DMSans_400Regular", fontSize: 14 }}>
+          ← Back
+        </Text>
       </Pressable>
       {loading || !event ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 32 }} />
       ) : (
-        <ScrollView>
-          <Heading>{event.title}</Heading>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <Text
+            style={{
+              fontFamily: "DMSans_700Bold",
+              fontSize: 22,
+              color: colors.fg,
+              marginTop: 24,
+            }}
+          >
+            {event.title}
+          </Text>
           <Muted>
-            {event.kind} · {event.status}
+            {eventKindLabel(event.kind)} · {event.status}
             {event.entry_fee_units != null
               ? ` · entry ${formatMoney(event.entry_fee_units)}`
               : ""}
             {event.wager_mode ? ` · ${event.wager_mode}` : ""}
           </Muted>
 
-          <Heading>Players</Heading>
-          {players.map((p, i) => (
-            <Card key={`${p.display_name}-${i}`}>
-              <Text style={{ color: colors.fg, fontFamily: "DMSans_700Bold" }}>
-                {p.display_name ?? "Player"}
-              </Text>
-              <Text style={{ color: colors.muted, marginTop: 4, fontFamily: "DMSans_400Regular" }}>
-                {p.invite_status}
-                {p.units_delta != null ? ` · ${p.units_delta > 0 ? "+" : ""}${p.units_delta}` : ""}
-              </Text>
-            </Card>
-          ))}
+          <SectionTitle>Players</SectionTitle>
+          <ListSection>
+            {players.map((p, i) => (
+              <ListRow
+                key={`${p.display_name}-${i}`}
+                title={p.display_name ?? "Player"}
+                subtitle={
+                  p.units_delta != null
+                    ? `${p.invite_status} · ${p.units_delta > 0 ? "+" : ""}${formatMoney(p.units_delta)}`
+                    : p.invite_status
+                }
+                isFirst={i === 0}
+                isLast={i === players.length - 1}
+              />
+            ))}
+          </ListSection>
           <Muted>
-            Settle scores and manage invites on the web app for now — mobile settle comes next.
+            Settle scores on the web app for now — full mobile settle comes next.
           </Muted>
+          <Text style={{ height: spacing.xl }}> </Text>
         </ScrollView>
       )}
     </Screen>

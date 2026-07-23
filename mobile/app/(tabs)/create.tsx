@@ -1,9 +1,16 @@
 import { useState } from "react";
-import { Alert, ScrollView, Text } from "react-native";
+import { Alert, ScrollView, View } from "react-native";
 
-import { BrandTitle, Field, Heading, Muted, PrimaryButton, Screen } from "@/components/ui";
+import {
+  BrandTitle,
+  Field,
+  Muted,
+  PrimaryButton,
+  Screen,
+  SectionTitle,
+} from "@/components/ui";
 import { supabase } from "@/lib/supabase";
-import { colors, spacing } from "@/lib/theme";
+import { spacing } from "@/lib/theme";
 
 export default function CreateScreen() {
   const [leagueName, setLeagueName] = useState("");
@@ -18,7 +25,7 @@ export default function CreateScreen() {
       return;
     }
     setBusy(true);
-    const { data, error } = await supabase.rpc("create_league", {
+    const { error } = await supabase.rpc("create_league", {
       p_name: leagueName.trim(),
       p_description: null,
       p_entry_fee: 0,
@@ -28,8 +35,7 @@ export default function CreateScreen() {
       Alert.alert("Couldn’t create league", error.message);
       return;
     }
-    const name = data && typeof data === "object" && "name" in data ? String(data.name) : "You’re in.";
-    Alert.alert("League created", name);
+    Alert.alert("League created", "You’re in.");
     setLeagueName("");
   }
 
@@ -103,26 +109,35 @@ export default function CreateScreen() {
   }
 
   return (
-    <Screen style={{ paddingTop: spacing.xl + 8 }}>
-      <ScrollView>
-        <BrandTitle />
-        <Heading>Create</Heading>
+    <Screen>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <BrandTitle size="md" />
         <Muted>Start a league, join with a code, or spin up a quick pot game.</Muted>
 
-        <Text style={section}>New league</Text>
+        <SectionTitle>New league</SectionTitle>
         <Field label="League name" value={leagueName} onChangeText={setLeagueName} />
-        <PrimaryButton label={busy ? "Working…" : "Create league"} onPress={() => void createLeague()} disabled={busy} />
+        <PrimaryButton
+          label={busy ? "Working…" : "Create league"}
+          onPress={() => void createLeague()}
+          disabled={busy}
+          style={{ marginTop: 16, alignSelf: "flex-start" }}
+        />
 
-        <Text style={section}>Join league</Text>
+        <SectionTitle>Join league</SectionTitle>
         <Field
           label="Invite code"
           autoCapitalize="characters"
           value={joinCode}
           onChangeText={setJoinCode}
         />
-        <PrimaryButton label={busy ? "Working…" : "Join"} onPress={() => void joinLeague()} disabled={busy} />
+        <PrimaryButton
+          label={busy ? "Working…" : "Join"}
+          onPress={() => void joinLeague()}
+          disabled={busy}
+          style={{ marginTop: 16, alignSelf: "flex-start" }}
+        />
 
-        <Text style={section}>Quick pot game</Text>
+        <SectionTitle>Quick pot game</SectionTitle>
         <Field label="Title" value={eventTitle} onChangeText={setEventTitle} />
         <Field
           label="Entry fee"
@@ -134,15 +149,10 @@ export default function CreateScreen() {
           label={busy ? "Working…" : "Create game"}
           onPress={() => void createQuickGame()}
           disabled={busy}
+          style={{ marginTop: 16, alignSelf: "flex-start" }}
         />
+        <View style={{ height: spacing.xl }} />
       </ScrollView>
     </Screen>
   );
 }
-
-const section = {
-  marginTop: 28,
-  color: colors.fg,
-  fontFamily: "DMSans_700Bold" as const,
-  fontSize: 16,
-};
