@@ -109,7 +109,7 @@ export default function CreateScreen() {
   }
 
   return (
-    <Screen>
+    <Screen safeBottom={false}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <BrandTitle size="md" />
         <Muted>Start a league, join with a code, or spin up a quick pot game.</Muted>

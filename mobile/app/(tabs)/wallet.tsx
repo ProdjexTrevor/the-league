@@ -124,7 +124,7 @@ export default function WalletScreen() {
   const totalDue = owedToMe.reduce((s, r) => s + r.amount, 0);
 
   return (
-    <Screen>
+    <Screen safeBottom={false}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <Pressable onPress={() => router.push("/(tabs)/home")}>
           <BrandTitle size="md" />

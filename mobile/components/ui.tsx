@@ -16,10 +16,13 @@ export function Screen({
   children,
   style,
   padded = true,
+  /** When false (tab screens), skip bottom safe-area — the tab bar owns it. */
+  safeBottom = true,
 }: {
   children: React.ReactNode;
   style?: ViewStyle;
   padded?: boolean;
+  safeBottom?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   return (
@@ -44,7 +47,7 @@ export function Screen({
           padded && {
             paddingHorizontal: 16,
             paddingTop: insets.top + 16,
-            paddingBottom: insets.bottom + 8,
+            paddingBottom: (safeBottom ? insets.bottom : 0) + 8,
           },
           style,
         ]}

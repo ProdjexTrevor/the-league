@@ -117,7 +117,7 @@ export default function HomeScreen() {
   );
 
   return (
-    <Screen>
+    <Screen safeBottom={false}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View
           style={{
