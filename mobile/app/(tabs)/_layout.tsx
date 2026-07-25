@@ -52,8 +52,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="create"
         options={{
-          title: "Create",
-          tabBarLabel: ({ focused }) => <TabLabel label="Create" focused={focused} />,
+          title: "Wager",
+          tabBarLabel: ({ focused }) => <TabLabel label="Wager" focused={focused} />,
         }}
       />
       <Tabs.Screen

@@ -142,25 +142,15 @@ export function CreateWizard({
   }, [availablePlayers, playerSearch]);
 
   const steps = useMemo(() => {
-    if (!intent) return ["What do you want to do?"];
-    if (intent === "join") return ["What do you want to do?", "Invite code"];
+    if (!intent) return ["Wager"];
+    if (intent === "join") return ["Wager", "Invite code"];
     if (intent === "league") {
-      return ["What do you want to do?", "League details", "Review"];
+      return ["Wager", "League details", "Review"];
     }
     if (intent === "bet") {
-      return [
-        "What do you want to do?",
-        "Describe the bet",
-        "Who's in",
-        "Your wager",
-      ];
+      return ["Wager", "Describe the bet", "Who's in", "Your wager"];
     }
-    return [
-      "What do you want to do?",
-      "Pick the game",
-      "Who's playing",
-      "Stake",
-    ];
+    return ["Wager", "Pick the game", "Who's playing", "Stake"];
   }, [intent]);
 
   const maxStep = steps.length - 1;
@@ -248,7 +238,7 @@ export function CreateWizard({
   function goNext() {
     setError(null);
     if (step === 0 && !intent) {
-      setError("Pick what you want to do.");
+      setError("Pick a league, single game, or single bet.");
       return;
     }
     if (intent === "league" && step === 1 && !leagueName.trim()) {
@@ -446,24 +436,30 @@ export function CreateWizard({
       <div className="min-h-[280px] space-y-4">
         {step === 0 && (
           <div className="space-y-3 animate-rise">
+            <p className="text-sm text-muted">
+              One place to start — pick a league, a single game, or a single bet.
+            </p>
             {(
               [
                 [
+                  "league",
+                  "League",
+                  "Season group with an invite code for ongoing wagers",
+                ],
+                [
                   "match",
-                  "Start a game",
-                  "Pick a game, invite players, and an optional stake",
+                  "Single game",
+                  "Pick a game, invite players, optional stake",
                 ],
                 [
                   "bet",
-                  "Make a bet",
+                  "Single bet",
                   "Describe the terms; each side enters their own wager",
                 ],
-                ["league", "Create a league", "Friend group with an invite code"],
-                ["join", "Join a league", "Enter an invite code"],
               ] as const
             )
               .filter(([key]) => {
-                if (lockedLeagueId && (key === "league" || key === "join")) {
+                if (lockedLeagueId && key === "league") {
                   return false;
                 }
                 return true;
@@ -482,6 +478,25 @@ export function CreateWizard({
                   <p className="mt-1 text-sm text-muted">{desc}</p>
                 </button>
               ))}
+            {!lockedLeagueId && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIntent("join");
+                  setError(null);
+                }}
+                className={
+                  intent === "join"
+                    ? choiceActive
+                    : `${choiceClass} border-dashed`
+                }
+              >
+                <p className="font-medium text-fg">Join a league</p>
+                <p className="mt-1 text-sm text-muted">
+                  Already have an invite code?
+                </p>
+              </button>
+            )}
           </div>
         )}
 

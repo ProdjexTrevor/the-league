@@ -112,13 +112,7 @@ export default async function AppPage() {
           href="/create"
           className="inline-flex rounded-sm bg-accent px-5 py-3 text-sm font-semibold text-accent-ink transition hover:brightness-110"
         >
-          Start something
-        </Link>
-        <Link
-          href="/create?kind=bet"
-          className="inline-flex rounded-sm border border-line px-5 py-3 text-sm font-semibold text-fg transition hover:border-fg/40"
-        >
-          Make a bet
+          Wager
         </Link>
       </div>
 
@@ -165,7 +159,7 @@ export default async function AppPage() {
           <p className="mt-3 text-sm text-muted">
             No leagues yet.{" "}
             <Link href="/create" className="text-accent hover:underline">
-              Create or join
+              Start a wager
             </Link>
             .
           </p>
