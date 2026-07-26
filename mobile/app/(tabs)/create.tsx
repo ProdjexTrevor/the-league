@@ -427,7 +427,11 @@ export default function CreateScreen() {
 
   return (
     <Screen safeBottom={false}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
         <BrandTitle size="md" />
 
         {!intent ? (
@@ -492,7 +496,7 @@ export default function CreateScreen() {
                     ? "Set up game"
                     : gameStep === "players"
                       ? "Add players"
-                      : "Set odds"
+                      : "Stake & odds"
                   : intent === "bet"
                     ? betStep === "details"
                       ? "Single bet"
@@ -649,14 +653,32 @@ export default function CreateScreen() {
                   ).map(([key, label, desc]) => (
                     <Pressable
                       key={key}
-                      onPress={() => setWagerMode(key)}
-                      style={[
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: wagerMode === key }}
+                      onPress={() => {
+                        setWagerMode(key);
+                        if (key === "odds") {
+                          setPlayerOdds((prev) => {
+                            const next = { ...prev };
+                            for (const id of selectedPlayerIds) {
+                              next[id] = next[id] ?? { num: "2", den: "1" };
+                            }
+                            return next;
+                          });
+                        }
+                      }}
+                      style={({ pressed }) => [
                         styles.choice,
                         wagerMode === key && styles.choiceActive,
+                        pressed && styles.choicePressed,
                       ]}
                     >
-                      <Text style={styles.choiceLabel}>{label}</Text>
-                      <Text style={styles.choiceDesc}>{desc}</Text>
+                      <Text style={styles.choiceLabel} pointerEvents="none">
+                        {label}
+                      </Text>
+                      <Text style={styles.choiceDesc} pointerEvents="none">
+                        {desc}
+                      </Text>
                     </Pressable>
                   ))}
                 </View>
@@ -682,7 +704,7 @@ export default function CreateScreen() {
 
                 {wagerMode === "odds" && (
                   <View style={{ marginTop: 8, gap: 12 }}>
-                    <Muted>Odds like 2 / 1 for each player.</Muted>
+                    <Muted>Tap a box and enter fractional odds like 2 / 1.</Muted>
                     {selectedPlayerIds.map((id) => {
                       const name =
                         profiles.find((p) => p.id === id)?.display_name ??
@@ -690,7 +712,9 @@ export default function CreateScreen() {
                       const odds = playerOdds[id] ?? { num: "2", den: "1" };
                       return (
                         <View key={id} style={styles.oddsRow}>
-                          <Text style={styles.oddsName}>{name}</Text>
+                          <Text style={styles.oddsName} numberOfLines={1}>
+                            {name}
+                          </Text>
                           <TextInput
                             keyboardType="number-pad"
                             value={odds.num}
@@ -700,8 +724,11 @@ export default function CreateScreen() {
                                 [id]: { ...odds, num },
                               }))
                             }
+                            placeholder="2"
                             placeholderTextColor={colors.muted}
                             style={styles.oddsInput}
+                            editable
+                            selectTextOnFocus
                           />
                           <Text style={styles.oddsSlash}>/</Text>
                           <TextInput
@@ -713,8 +740,11 @@ export default function CreateScreen() {
                                 [id]: { ...odds, den },
                               }))
                             }
+                            placeholder="1"
                             placeholderTextColor={colors.muted}
                             style={styles.oddsInput}
+                            editable
+                            selectTextOnFocus
                           />
                         </View>
                       );
@@ -879,7 +909,8 @@ const styles = StyleSheet.create({
     fontFamily: "DMSans_500Medium",
     fontSize: 14,
     color: colors.fg,
-    flex: 1.2,
+    flex: 1,
+    minWidth: 0,
   },
   oddsSlash: {
     fontFamily: "DMSans_400Regular",
@@ -887,15 +918,17 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   oddsInput: {
-    flex: 1,
+    width: 64,
+    minHeight: 44,
     borderWidth: 1,
     borderColor: colors.line,
     borderRadius: 2,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 10,
     color: colors.fg,
     fontFamily: "DMSans_400Regular",
     fontSize: 16,
     backgroundColor: colors.elevated,
+    textAlign: "center",
   },
 });

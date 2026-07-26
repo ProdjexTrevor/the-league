@@ -437,7 +437,11 @@ export default function EventDetailScreen() {
       {loading || !event ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 32 }} />
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
           <Muted style={{ marginTop: 20 }}>
             {eventKindLabel(event.kind)}
             {catalogName ? ` · ${catalogName}` : ""} · {event.status}
@@ -614,30 +618,43 @@ export default function EventDetailScreen() {
                   />
                 ) : (
                   lines.map((line, i) => (
-                    <ListRow
+                    <View
                       key={line.id}
-                      title={
-                        line.player_id
-                          ? nameById.get(line.player_id) ?? "Player"
-                          : line.side_label ?? "Side"
-                      }
-                      subtitle={lineSubtitle(line)}
-                      isFirst={i === 0}
-                      isLast={i === lines.length - 1}
-                      onPress={
-                        event.status === "completed" || busy
-                          ? undefined
-                          : () =>
-                              Alert.alert("Remove wager?", undefined, [
-                                { text: "Cancel", style: "cancel" },
-                                {
-                                  text: "Remove",
-                                  style: "destructive",
-                                  onPress: () => void removeLine(line.id),
-                                },
-                              ])
-                      }
-                    />
+                      style={[
+                        styles.lineRow,
+                        i === 0 && styles.lineRowFirst,
+                      ]}
+                    >
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={styles.lineTitle}>
+                          {line.player_id
+                            ? nameById.get(line.player_id) ?? "Player"
+                            : line.side_label ?? "Side"}
+                        </Text>
+                        <Text style={styles.lineSubtitle}>
+                          {lineSubtitle(line)}
+                        </Text>
+                      </View>
+                      {event.status !== "completed" && (
+                        <Pressable
+                          accessibilityRole="button"
+                          hitSlop={8}
+                          disabled={busy}
+                          onPress={() =>
+                            Alert.alert("Remove wager?", undefined, [
+                              { text: "Cancel", style: "cancel" },
+                              {
+                                text: "Remove",
+                                style: "destructive",
+                                onPress: () => void removeLine(line.id),
+                              },
+                            ])
+                          }
+                        >
+                          <Text style={styles.removeLink}>Remove</Text>
+                        </Pressable>
+                      )}
+                    </View>
                   ))
                 )}
               </ListSection>
@@ -680,25 +697,29 @@ export default function EventDetailScreen() {
                   />
                   {showOddsInputs && (
                     <View style={styles.oddsRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Odds</Text>
-                        <View style={styles.oddsInputs}>
-                          <TextInput
-                            keyboardType="number-pad"
-                            value={oddsNum}
-                            onChangeText={setOddsNum}
-                            placeholderTextColor={colors.muted}
-                            style={styles.oddsInput}
-                          />
-                          <Text style={styles.slash}>/</Text>
-                          <TextInput
-                            keyboardType="number-pad"
-                            value={oddsDen}
-                            onChangeText={setOddsDen}
-                            placeholderTextColor={colors.muted}
-                            style={styles.oddsInput}
-                          />
-                        </View>
+                      <Text style={styles.label}>Odds (tap to edit)</Text>
+                      <View style={styles.oddsInputs}>
+                        <TextInput
+                          keyboardType="number-pad"
+                          value={oddsNum}
+                          onChangeText={setOddsNum}
+                          placeholder="2"
+                          placeholderTextColor={colors.muted}
+                          style={styles.oddsInput}
+                          editable
+                          selectTextOnFocus
+                        />
+                        <Text style={styles.slash}>/</Text>
+                        <TextInput
+                          keyboardType="number-pad"
+                          value={oddsDen}
+                          onChangeText={setOddsDen}
+                          placeholder="1"
+                          placeholderTextColor={colors.muted}
+                          style={styles.oddsInput}
+                          editable
+                          selectTextOnFocus
+                        />
                       </View>
                     </View>
                   )}
@@ -907,7 +928,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   oddsInput: {
-    flex: 1,
+    width: 72,
+    minHeight: 44,
     borderWidth: 1,
     borderColor: colors.line,
     borderRadius: 2,
@@ -917,11 +939,39 @@ const styles = StyleSheet.create({
     fontFamily: "DMSans_400Regular",
     fontSize: 16,
     backgroundColor: colors.elevated,
+    textAlign: "center",
   },
   slash: {
     fontFamily: "DMSans_400Regular",
     fontSize: 16,
     color: colors.muted,
+  },
+  lineRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingVertical: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
+  },
+  lineRowFirst: { borderTopWidth: 0 },
+  lineTitle: {
+    fontFamily: "DMSans_500Medium",
+    fontSize: 16,
+    color: colors.fg,
+  },
+  lineSubtitle: {
+    fontFamily: "DMSans_400Regular",
+    fontSize: 14,
+    color: colors.muted,
+    marginTop: 2,
+  },
+  removeLink: {
+    fontFamily: "DMSans_400Regular",
+    fontSize: 12,
+    color: colors.muted,
+    paddingTop: 2,
   },
   settleRow: {
     marginBottom: 14,

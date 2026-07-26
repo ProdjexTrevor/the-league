@@ -944,7 +944,8 @@ export function CreateWizard({
                       ensureTeamAssignments(selectedPlayerIds);
                     }
                   }}
-                  className={wagerMode === value ? choiceActive : choiceClass}
+                  aria-pressed={wagerMode === value}
+                  className={`${wagerMode === value ? choiceActive : choiceClass} cursor-pointer`}
                 >
                   <p className="font-medium">{label}</p>
                   <p className="mt-1 text-sm text-muted">{desc}</p>
@@ -1030,7 +1031,7 @@ export function CreateWizard({
                                   [id]: { ...odds, num: e.target.value },
                                 }))
                               }
-                              className="w-16 rounded-sm border border-line bg-bg-elevated px-2 py-2 text-base outline-none focus:border-accent sm:text-sm"
+                              className="min-h-11 w-16 rounded-sm border border-line bg-bg-elevated px-2 py-2 text-base outline-none focus:border-accent"
                               aria-label={`${name} odds numerator`}
                             />
                             <span className="text-muted">/</span>
@@ -1044,7 +1045,7 @@ export function CreateWizard({
                                   [id]: { ...odds, den: e.target.value },
                                 }))
                               }
-                              className="w-16 rounded-sm border border-line bg-bg-elevated px-2 py-2 text-base outline-none focus:border-accent sm:text-sm"
+                              className="min-h-11 w-16 rounded-sm border border-line bg-bg-elevated px-2 py-2 text-base outline-none focus:border-accent"
                               aria-label={`${name} odds denominator`}
                             />
                           </div>
