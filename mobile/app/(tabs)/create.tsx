@@ -552,7 +552,13 @@ export default function CreateScreen() {
                 {gameCatalog.length === 0 ? (
                   <Muted>No catalog games yet. Add them on the web app.</Muted>
                 ) : (
-                  <View style={styles.choices}>
+                  <ScrollView
+                    style={styles.choicesScroll}
+                    contentContainerStyle={styles.choicesScrollContent}
+                    nestedScrollEnabled
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator
+                  >
                     {gameCatalog.map((g) => (
                       <Pressable
                         key={g.id}
@@ -569,7 +575,7 @@ export default function CreateScreen() {
                         <Text style={styles.choiceDesc}>{g.scoring_mode}</Text>
                       </Pressable>
                     ))}
-                  </View>
+                  </ScrollView>
                 )}
                 <Field
                   label="Title"
@@ -865,6 +871,14 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 20,
     marginBottom: 8,
+  },
+  choicesScroll: {
+    marginTop: 16,
+    maxHeight: 240,
+  },
+  choicesScrollContent: {
+    gap: 12,
+    paddingBottom: 4,
   },
   choices: {
     marginTop: 16,
