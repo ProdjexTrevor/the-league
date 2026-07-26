@@ -1,5 +1,14 @@
-import { useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "expo-router";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 import {
   BrandTitle,
@@ -13,9 +22,23 @@ import { supabase } from "@/lib/supabase";
 import { colors, spacing } from "@/lib/theme";
 
 type Intent = "league" | "game" | "bet" | "join" | null;
+type GameStep = "details" | "players" | "odds";
+type WagerMode = "pot" | "odds" | "none";
+
+type CatalogGame = {
+  id: string;
+  name: string;
+  scoring_mode: string;
+  slug: string | null;
+};
+
+type Profile = { id: string; display_name: string };
 
 export default function CreateScreen() {
+  const router = useRouter();
   const [intent, setIntent] = useState<Intent>(null);
+  const [gameStep, setGameStep] = useState<GameStep>("details");
+
   const [leagueName, setLeagueName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [eventTitle, setEventTitle] = useState("");
@@ -24,6 +47,55 @@ export default function CreateScreen() {
   const [myBetWager, setMyBetWager] = useState("10");
   const [busy, setBusy] = useState(false);
 
+  const [catalog, setCatalog] = useState<CatalogGame[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [catalogId, setCatalogId] = useState("");
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
+  const [playerSearch, setPlayerSearch] = useState("");
+  const [wagerMode, setWagerMode] = useState<WagerMode>("pot");
+  const [stake, setStake] = useState("10");
+  const [playerOdds, setPlayerOdds] = useState<
+    Record<string, { num: string; den: string }>
+  >({});
+
+  const loadLists = useCallback(async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    setCurrentUserId(user.id);
+    setSelectedPlayerIds((prev) =>
+      prev.includes(user.id) ? prev : [user.id, ...prev]
+    );
+
+    const [{ data: games }, { data: users }] = await Promise.all([
+      supabase
+        .from("game_catalog")
+        .select("id, name, scoring_mode, slug")
+        .eq("is_active", true)
+        .order("sort_order"),
+      supabase.from("profiles").select("id, display_name").order("display_name"),
+    ]);
+    setCatalog((games as CatalogGame[]) ?? []);
+    setProfiles((users as Profile[]) ?? []);
+  }, []);
+
+  useEffect(() => {
+    void loadLists();
+  }, [loadLists]);
+
+  const gameCatalog = useMemo(
+    () => catalog.filter((g) => g.slug !== "proposition"),
+    [catalog]
+  );
+
+  const filteredPlayers = useMemo(() => {
+    const q = playerSearch.trim().toLowerCase();
+    if (!q) return profiles;
+    return profiles.filter((p) => p.display_name.toLowerCase().includes(q));
+  }, [profiles, playerSearch]);
+
   function resetForm() {
     setLeagueName("");
     setJoinCode("");
@@ -31,11 +103,43 @@ export default function CreateScreen() {
     setBetNotes("");
     setEntryFee("10");
     setMyBetWager("10");
+    setCatalogId("");
+    setSelectedPlayerIds(currentUserId ? [currentUserId] : []);
+    setPlayerSearch("");
+    setWagerMode("pot");
+    setStake("10");
+    setPlayerOdds({});
+    setGameStep("details");
   }
 
   function goBack() {
+    if (intent === "game" && gameStep === "odds") {
+      setGameStep("players");
+      return;
+    }
+    if (intent === "game" && gameStep === "players") {
+      setGameStep("details");
+      return;
+    }
     setIntent(null);
     resetForm();
+  }
+
+  function togglePlayer(id: string) {
+    if (id === currentUserId) return;
+    setSelectedPlayerIds((prev) => {
+      const next = prev.includes(id)
+        ? prev.filter((x) => x !== id)
+        : [...prev, id];
+      setPlayerOdds((odds) => {
+        const kept: Record<string, { num: string; den: string }> = {};
+        for (const pid of next) {
+          kept[pid] = odds[pid] ?? { num: "2", den: "1" };
+        }
+        return kept;
+      });
+      return next;
+    });
   }
 
   async function createLeague() {
@@ -55,7 +159,8 @@ export default function CreateScreen() {
       return;
     }
     Alert.alert("League created", "You’re in.");
-    goBack();
+    setIntent(null);
+    resetForm();
   }
 
   async function joinLeague() {
@@ -73,59 +178,126 @@ export default function CreateScreen() {
       return;
     }
     Alert.alert("Joined", "Welcome to the league.");
-    goBack();
+    setIntent(null);
+    resetForm();
   }
 
-  async function createGame() {
+  function continueGameDetails() {
+    if (!catalogId) {
+      Alert.alert("Pick a game");
+      return;
+    }
     if (!eventTitle.trim()) {
       Alert.alert("Title required");
       return;
     }
+    setGameStep("players");
+  }
+
+  function continueGamePlayers() {
+    if (selectedPlayerIds.length < 2) {
+      Alert.alert("Invite players", "Select at least one other player.");
+      return;
+    }
+    const odds: Record<string, { num: string; den: string }> = {};
+    for (const id of selectedPlayerIds) {
+      odds[id] = playerOdds[id] ?? { num: "2", den: "1" };
+    }
+    setPlayerOdds(odds);
+    setGameStep("odds");
+  }
+
+  async function createGame() {
+    if (!currentUserId || !catalogId) {
+      Alert.alert("Missing game or sign-in");
+      return;
+    }
+    if (selectedPlayerIds.length < 2) {
+      Alert.alert("Invite players", "Select at least one other player.");
+      return;
+    }
     const fee = Number(entryFee);
+    const stakeNum = Number(stake);
     if (!Number.isFinite(fee) || fee < 0) {
       Alert.alert("Entry fee invalid");
       return;
     }
-    setBusy(true);
-
-    const { data: catalog, error: catalogError } = await supabase
-      .from("game_catalog")
-      .select("id")
-      .eq("is_active", true)
-      .neq("slug", "proposition")
-      .order("sort_order", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (catalogError || !catalog?.id) {
-      setBusy(false);
-      Alert.alert(
-        "No games in catalog",
-        catalogError?.message ?? "Add a catalog game on the web app first."
-      );
+    if (wagerMode !== "none" && (!(Number.isFinite(stakeNum) && stakeNum > 0))) {
+      Alert.alert("Stake required", "Enter a stake greater than 0.");
       return;
     }
+    if (wagerMode === "odds") {
+      for (const id of selectedPlayerIds) {
+        const o = playerOdds[id] ?? { num: "2", den: "1" };
+        if (!(Number(o.num) > 0) || !(Number(o.den) > 0)) {
+          Alert.alert("Odds required", "Set odds like 2 / 1 for every player.");
+          return;
+        }
+      }
+    }
 
-    const { error } = await supabase.rpc("create_event", {
+    setBusy(true);
+    const { data: event, error } = await supabase.rpc("create_event", {
       p_kind: "game",
       p_title: eventTitle.trim(),
-      p_catalog_id: catalog.id,
+      p_catalog_id: catalogId,
       p_league_id: null,
       p_entry_fee: fee,
-      p_wager_mode: "pot",
-      p_stake: fee,
+      p_wager_mode: wagerMode,
+      p_stake: wagerMode === "none" ? 0 : stakeNum,
       p_notes: null,
       p_format: null,
       p_bracket_size: null,
     });
 
-    setBusy(false);
-    if (error) {
-      Alert.alert("Couldn’t create game", error.message);
+    if (error || !event?.id) {
+      setBusy(false);
+      Alert.alert("Couldn’t create game", error?.message ?? "Unknown error");
       return;
     }
-    Alert.alert("Game created", "Find it on Home. Invite players from the web app for now.");
-    goBack();
+
+    const entry = Number(event.entry_fee_units) || 0;
+    for (const playerId of selectedPlayerIds) {
+      if (playerId === currentUserId) continue;
+      const { error: playerError } = await supabase.from("event_players").insert({
+        event_id: event.id,
+        user_id: playerId,
+        entry_paid: entry > 0,
+        units_paid: entry,
+        invite_status: "pending",
+      });
+      if (playerError) {
+        setBusy(false);
+        Alert.alert("Game created, invite failed", playerError.message);
+        router.push(`/event/${event.id}`);
+        return;
+      }
+    }
+
+    if (wagerMode === "odds") {
+      for (const playerId of selectedPlayerIds) {
+        const o = playerOdds[playerId] ?? { num: "2", den: "1" };
+        const { error: lineError } = await supabase.from("wager_lines").insert({
+          event_id: event.id,
+          player_id: playerId,
+          odds_num: Number(o.num),
+          odds_den: Number(o.den),
+          stake_units: stakeNum,
+        });
+        if (lineError) {
+          setBusy(false);
+          Alert.alert("Game created, odds failed", lineError.message);
+          router.push(`/event/${event.id}`);
+          return;
+        }
+      }
+    }
+
+    setBusy(false);
+    Alert.alert("Game created", "Invites sent. Open the game to manage odds.");
+    setIntent(null);
+    resetForm();
+    router.push(`/event/${event.id}`);
   }
 
   async function createBet() {
@@ -137,21 +309,21 @@ export default function CreateScreen() {
       Alert.alert("Describe the bet");
       return;
     }
-    const stake = Number(myBetWager);
-    if (!Number.isFinite(stake) || stake <= 0) {
+    const stakeVal = Number(myBetWager);
+    if (!Number.isFinite(stakeVal) || stakeVal <= 0) {
       Alert.alert("Enter a wager greater than 0");
       return;
     }
     setBusy(true);
 
-    const { data: catalog, error: catalogError } = await supabase
+    const { data: propCatalog, error: catalogError } = await supabase
       .from("game_catalog")
       .select("id")
       .eq("is_active", true)
       .eq("slug", "proposition")
       .maybeSingle();
 
-    if (catalogError || !catalog?.id) {
+    if (catalogError || !propCatalog?.id) {
       setBusy(false);
       Alert.alert(
         "Bet catalog missing",
@@ -172,11 +344,11 @@ export default function CreateScreen() {
     const { data: event, error } = await supabase.rpc("create_event", {
       p_kind: "bet",
       p_title: eventTitle.trim(),
-      p_catalog_id: catalog.id,
+      p_catalog_id: propCatalog.id,
       p_league_id: null,
       p_entry_fee: 0,
       p_wager_mode: "custom",
-      p_stake: stake,
+      p_stake: stakeVal,
       p_notes: betNotes.trim(),
       p_format: null,
       p_bracket_size: null,
@@ -193,17 +365,19 @@ export default function CreateScreen() {
       player_id: user.id,
       odds_num: 1,
       odds_den: 1,
-      stake_units: stake,
+      stake_units: stakeVal,
     });
 
     setBusy(false);
     if (lineError) {
       Alert.alert("Bet created, but wager failed", lineError.message);
-      goBack();
+      router.push(`/event/${event.id}`);
       return;
     }
-    Alert.alert("Bet created", "Find it on Home. Invite the other side from the web app for now.");
-    goBack();
+    Alert.alert("Bet created", "Open the bet to invite the other side.");
+    setIntent(null);
+    resetForm();
+    router.push(`/event/${event.id}`);
   }
 
   return (
@@ -229,7 +403,7 @@ export default function CreateScreen() {
                   [
                     "game",
                     "Single game",
-                    "Pick a title and stake for a quick pot game",
+                    "Pick a game, invite players, set stakes or odds",
                   ],
                   [
                     "bet",
@@ -269,12 +443,20 @@ export default function CreateScreen() {
               {intent === "league"
                 ? "League"
                 : intent === "game"
-                  ? "Single game"
+                  ? gameStep === "details"
+                    ? "Set up game"
+                    : gameStep === "players"
+                      ? "Add players"
+                      : "Set odds"
                   : intent === "bet"
                     ? "Single bet"
                     : "Join a league"}
             </Text>
-            <Muted>Part of the Wager workflow.</Muted>
+            <Muted>
+              {intent === "game"
+                ? `Step ${gameStep === "details" ? 1 : gameStep === "players" ? 2 : 3} of 3`
+                : "Part of the Wager workflow."}
+            </Muted>
 
             {intent === "league" && (
               <>
@@ -311,8 +493,31 @@ export default function CreateScreen() {
               </>
             )}
 
-            {intent === "game" && (
+            {intent === "game" && gameStep === "details" && (
               <>
+                <Text style={styles.sectionLabel}>Game</Text>
+                {gameCatalog.length === 0 ? (
+                  <Muted>No catalog games yet. Add them on the web app.</Muted>
+                ) : (
+                  <View style={styles.choices}>
+                    {gameCatalog.map((g) => (
+                      <Pressable
+                        key={g.id}
+                        onPress={() => {
+                          setCatalogId(g.id);
+                          setEventTitle((t) => t || g.name);
+                        }}
+                        style={[
+                          styles.choice,
+                          catalogId === g.id && styles.choiceActive,
+                        ]}
+                      >
+                        <Text style={styles.choiceLabel}>{g.name}</Text>
+                        <Text style={styles.choiceDesc}>{g.scoring_mode}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
                 <Field
                   label="Title"
                   value={eventTitle}
@@ -320,13 +525,149 @@ export default function CreateScreen() {
                   placeholder="Thursday corn hole"
                 />
                 <Field
-                  label="Stake / entry (money)"
+                  label="Entry fee (optional, money)"
                   keyboardType="decimal-pad"
                   value={entryFee}
                   onChangeText={setEntryFee}
                 />
                 <PrimaryButton
-                  label={busy ? "Working…" : "Create game"}
+                  label="Continue"
+                  onPress={continueGameDetails}
+                  disabled={busy}
+                  style={{ marginTop: 16, alignSelf: "flex-start" }}
+                />
+              </>
+            )}
+
+            {intent === "game" && gameStep === "players" && (
+              <>
+                <Muted>
+                  Invite everyone in this game. They must accept before they are
+                  in. You are always included.
+                </Muted>
+                <Field
+                  label="Search players"
+                  value={playerSearch}
+                  onChangeText={setPlayerSearch}
+                  placeholder="Search…"
+                />
+                <View style={styles.choices}>
+                  {filteredPlayers.map((u) => {
+                    const checked = selectedPlayerIds.includes(u.id);
+                    const locked = u.id === currentUserId;
+                    return (
+                      <Pressable
+                        key={u.id}
+                        disabled={locked}
+                        onPress={() => togglePlayer(u.id)}
+                        style={[
+                          styles.choice,
+                          checked && styles.choiceActive,
+                          locked && { opacity: 0.9 },
+                        ]}
+                      >
+                        <Text style={styles.choiceLabel}>
+                          {u.display_name}
+                          {locked ? " (you)" : ""}
+                        </Text>
+                        <Text style={styles.choiceDesc}>
+                          {checked ? "Selected" : "Tap to invite"}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Muted>Selected: {selectedPlayerIds.length}</Muted>
+                <PrimaryButton
+                  label="Continue"
+                  onPress={continueGamePlayers}
+                  disabled={busy}
+                  style={{ marginTop: 16, alignSelf: "flex-start" }}
+                />
+              </>
+            )}
+
+            {intent === "game" && gameStep === "odds" && (
+              <>
+                <View style={styles.choices}>
+                  {(
+                    [
+                      ["pot", "Equal pot", `Everyone puts in ${stake || "10"}`],
+                      ["odds", "Odds", "Fractional odds per player"],
+                      ["none", "No wager", "Just track who won"],
+                    ] as const
+                  ).map(([key, label, desc]) => (
+                    <Pressable
+                      key={key}
+                      onPress={() => setWagerMode(key)}
+                      style={[
+                        styles.choice,
+                        wagerMode === key && styles.choiceActive,
+                      ]}
+                    >
+                      <Text style={styles.choiceLabel}>{label}</Text>
+                      <Text style={styles.choiceDesc}>{desc}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                {wagerMode !== "none" && (
+                  <Field
+                    label={
+                      wagerMode === "odds"
+                        ? "Stake on each odds line (money)"
+                        : "Stake per player (money)"
+                    }
+                    keyboardType="decimal-pad"
+                    value={stake}
+                    onChangeText={setStake}
+                  />
+                )}
+
+                {wagerMode === "odds" && (
+                  <View style={{ marginTop: 8, gap: 12 }}>
+                    <Muted>Odds like 2 / 1 for each player.</Muted>
+                    {selectedPlayerIds.map((id) => {
+                      const name =
+                        profiles.find((p) => p.id === id)?.display_name ??
+                        "Player";
+                      const odds = playerOdds[id] ?? { num: "2", den: "1" };
+                      return (
+                        <View key={id} style={styles.oddsRow}>
+                          <Text style={styles.oddsName}>{name}</Text>
+                          <TextInput
+                            keyboardType="number-pad"
+                            value={odds.num}
+                            onChangeText={(num) =>
+                              setPlayerOdds((prev) => ({
+                                ...prev,
+                                [id]: { ...odds, num },
+                              }))
+                            }
+                            placeholderTextColor={colors.muted}
+                            style={styles.oddsInput}
+                          />
+                          <Text style={styles.oddsSlash}>/</Text>
+                          <TextInput
+                            keyboardType="number-pad"
+                            value={odds.den}
+                            onChangeText={(den) =>
+                              setPlayerOdds((prev) => ({
+                                ...prev,
+                                [id]: { ...odds, den },
+                              }))
+                            }
+                            placeholderTextColor={colors.muted}
+                            style={styles.oddsInput}
+                          />
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                <PrimaryButton
+                  label={busy ? "Creating…" : "Create game & send invites"}
                   onPress={() => void createGame()}
                   disabled={busy}
                   style={{ marginTop: 16, alignSelf: "flex-start" }}
@@ -384,8 +725,15 @@ const styles = StyleSheet.create({
     marginTop: 28,
     letterSpacing: -0.4,
   },
+  sectionLabel: {
+    fontFamily: "DMSans_500Medium",
+    fontSize: 14,
+    color: colors.muted,
+    marginTop: 20,
+    marginBottom: 8,
+  },
   choices: {
-    marginTop: 24,
+    marginTop: 16,
     gap: 12,
   },
   choice: {
@@ -394,6 +742,10 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     paddingHorizontal: 16,
     paddingVertical: 16,
+  },
+  choiceActive: {
+    borderColor: colors.accent,
+    backgroundColor: "rgba(163, 230, 53, 0.08)",
   },
   choiceDashed: {
     borderStyle: "dashed",
@@ -413,5 +765,33 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 4,
     lineHeight: 20,
+  },
+  oddsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  oddsName: {
+    fontFamily: "DMSans_500Medium",
+    fontSize: 14,
+    color: colors.fg,
+    flex: 1.2,
+  },
+  oddsSlash: {
+    fontFamily: "DMSans_400Regular",
+    fontSize: 16,
+    color: colors.muted,
+  },
+  oddsInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: colors.fg,
+    fontFamily: "DMSans_400Regular",
+    fontSize: 16,
+    backgroundColor: colors.elevated,
   },
 });

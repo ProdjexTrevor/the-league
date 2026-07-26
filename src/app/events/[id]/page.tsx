@@ -46,6 +46,7 @@ export default async function EventPage({ params }: Props) {
     { data: players },
     { data: lines },
     { data: members },
+    { data: profiles },
   ] = await Promise.all([
     supabase
       .from("game_catalog")
@@ -65,12 +66,30 @@ export default async function EventPage({ params }: Props) {
           .select("user_id, profiles(display_name)")
           .eq("league_id", event.league_id)
       : Promise.resolve({ data: null }),
+    supabase.from("profiles").select("id, display_name").order("display_name"),
   ]);
 
   const scoringMode = (catalog?.scoring_mode ?? "placement") as ScoringMode;
   const playerIds = new Set(players?.map((p) => p.user_id));
-  const available =
-    members?.filter((m) => !playerIds.has(m.user_id)) ?? [];
+
+  type InviteOption = {
+    user_id: string;
+    display_name: string;
+  };
+
+  const leagueMemberIds = new Set((members ?? []).map((m) => m.user_id));
+  const available: InviteOption[] = (profiles ?? [])
+    .filter((p) => !playerIds.has(p.id))
+    .map((p) => ({
+      user_id: p.id,
+      display_name: p.display_name,
+    }))
+    .sort((a, b) => {
+      const aLeague = leagueMemberIds.has(a.user_id) ? 0 : 1;
+      const bLeague = leagueMemberIds.has(b.user_id) ? 0 : 1;
+      if (aLeague !== bLeague) return aLeague - bLeague;
+      return a.display_name.localeCompare(b.display_name);
+    });
 
   const nameById = new Map(
     players?.map((p) => {
@@ -252,59 +271,68 @@ export default async function EventPage({ params }: Props) {
         </ul>
       </section>
 
-      {event.status !== "completed" && available.length > 0 && (
+      {event.status !== "completed" && (
         <section className="mt-10">
           <h2 className="text-lg font-semibold">Invite player</h2>
-          <form
-            action={addPlayerAction}
-            className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap"
-          >
-            <select
-              name="user_id"
-              required
-              defaultValue=""
-              className="w-full min-w-0 rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:w-auto sm:min-w-[12rem]"
+          {available.length > 0 ? (
+            <form
+              action={addPlayerAction}
+              className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap"
             >
-              <option value="" disabled>
-                Select member
-              </option>
-              {available.map((m) => {
-                const profile = Array.isArray(m.profiles)
-                  ? m.profiles[0]
-                  : m.profiles;
-                return (
+              <select
+                name="user_id"
+                required
+                defaultValue=""
+                className="w-full min-w-0 rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:w-auto sm:min-w-[12rem]"
+              >
+                <option value="" disabled>
+                  Select player
+                </option>
+                {available.map((m) => (
                   <option key={m.user_id} value={m.user_id}>
-                    {profile?.display_name ?? "Player"}
+                    {m.display_name}
                   </option>
-                );
-              })}
-            </select>
-            <input
-              name="side_label"
-              placeholder="Side label (optional)"
-              className="w-full min-w-0 rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:w-auto sm:min-w-[12rem]"
-            />
-            <button
-              type="submit"
-              className="rounded-sm border border-line px-4 py-2.5 text-sm hover:border-fg/40 sm:w-auto"
-            >
-              Send invite
-            </button>
-          </form>
+                ))}
+              </select>
+              <input
+                name="side_label"
+                placeholder="Side label (optional)"
+                className="w-full min-w-0 rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:w-auto sm:min-w-[12rem]"
+              />
+              <button
+                type="submit"
+                className="rounded-sm border border-line px-4 py-2.5 text-sm hover:border-fg/40 sm:w-auto"
+              >
+                Send invite
+              </button>
+            </form>
+          ) : (
+            <p className="mt-3 text-sm text-muted">
+              Everyone who has signed up is already on this{" "}
+              {eventKindLabel(event.kind).toLowerCase()}, or no other players
+              have accounts yet.
+            </p>
+          )}
         </section>
       )}
 
-      {showWagerBoard && (
+      {(showWagerBoard || event.status !== "completed") && (
         <section className="mt-10">
           <h2 className="text-lg font-semibold">
-            {event.wager_mode === "custom" ? "Custom wagers" : "Odds board"}
+            {event.wager_mode === "custom"
+              ? "Custom wagers"
+              : event.wager_mode === "odds"
+                ? "Odds board"
+                : "Wagers & odds"}
           </h2>
           <p className="mt-1 text-sm text-muted">
             {event.wager_mode === "custom"
               ? event.kind === "bet"
                 ? "Each side enters their own stake. Losers forfeit; winners take that pot."
                 : "Each player or team puts up the money shown. Losers forfeit; winners split that pot."
-              : `Fractional odds (legacy). Example: ${formatOdds(2, 1)} on stake ${formatMoney(event.default_stake_units)} means the other side puts up ${liability(Number(event.default_stake_units) || 0, 2, 1).toFixed(0)} if that line wins (full return ${payout(Number(event.default_stake_units) || 0, 2, 1).toFixed(0)}).`}
+              : event.wager_mode === "odds"
+                ? `Fractional odds. Example: ${formatOdds(2, 1)} on stake ${formatMoney(event.default_stake_units)} means the other side puts up ${liability(Number(event.default_stake_units) || 0, 2, 1).toFixed(0)} if that line wins (full return ${payout(Number(event.default_stake_units) || 0, 2, 1).toFixed(0)}).`
+                : "Add stake lines or fractional odds for this game. Equal-pot games settle from the shared stake; custom lines override."}
           </p>
           <ul className="mt-4 divide-y divide-line border-y border-line">
             {lines?.map((line) => (
@@ -316,7 +344,9 @@ export default async function EventPage({ params }: Props) {
                   {line.player_id
                     ? nameById.get(line.player_id) ?? line.player_id
                     : line.side_label}{" "}
-                  {event.wager_mode === "custom" ? (
+                  {event.wager_mode === "custom" &&
+                  line.odds_num === 1 &&
+                  line.odds_den === 1 ? (
                     <span className="text-accent">
                       {formatMoney(line.stake_units)} money
                     </span>
@@ -326,17 +356,18 @@ export default async function EventPage({ params }: Props) {
                         {formatOdds(line.odds_num, line.odds_den)}
                       </span>{" "}
                       · stake {formatMoney(line.stake_units)} money
-                      {Number(line.stake_units) > 0 && (
-                        <span className="text-muted">
-                          {" "}
-                          · opposite puts up{" "}
-                          {liability(
-                            Number(line.stake_units),
-                            line.odds_num,
-                            line.odds_den
-                          ).toFixed(0)}
-                        </span>
-                      )}
+                      {Number(line.stake_units) > 0 &&
+                        (line.odds_num !== 1 || line.odds_den !== 1) && (
+                          <span className="text-muted">
+                            {" "}
+                            · opposite puts up{" "}
+                            {liability(
+                              Number(line.stake_units),
+                              line.odds_num,
+                              line.odds_den
+                            ).toFixed(0)}
+                          </span>
+                        )}
                     </>
                   )}
                 </span>
@@ -379,28 +410,22 @@ export default async function EventPage({ params }: Props) {
                 placeholder="Team / side label"
                 className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:col-span-2"
               />
-              {event.wager_mode === "odds" && (
-                <>
-                  <input
-                    name="odds_num"
-                    type="number"
-                    min={1}
-                    required
-                    defaultValue={2}
-                    placeholder="2"
-                    className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
-                  />
-                  <input
-                    name="odds_den"
-                    type="number"
-                    min={1}
-                    required
-                    defaultValue={1}
-                    placeholder="1"
-                    className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
-                  />
-                </>
-              )}
+              <input
+                name="odds_num"
+                type="number"
+                min={1}
+                defaultValue={event.wager_mode === "odds" ? 2 : 1}
+                placeholder="Odds num"
+                className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
+              />
+              <input
+                name="odds_den"
+                type="number"
+                min={1}
+                defaultValue={1}
+                placeholder="Odds den"
+                className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
+              />
               <input
                 name="stake_units"
                 type="number"
@@ -415,7 +440,7 @@ export default async function EventPage({ params }: Props) {
                 type="submit"
                 className="rounded-sm border border-line px-4 py-2.5 text-sm hover:border-fg/40 sm:col-span-2"
               >
-                Add wager
+                Add wager / odds
               </button>
             </form>
           )}

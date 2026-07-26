@@ -87,7 +87,9 @@ export function CreateWizard({
   const [title, setTitle] = useState("");
   const [leagueId, setLeagueId] = useState(lockedLeagueId ?? "");
   const [entryFee, setEntryFee] = useState("0");
-  const [wagerMode, setWagerMode] = useState<"none" | "pot" | "custom">("pot");
+  const [wagerMode, setWagerMode] = useState<"none" | "pot" | "custom" | "odds">(
+    "pot"
+  );
   const [stake, setStake] = useState("10");
   const [wagerScope, setWagerScope] = useState<WagerScope>("player");
   const [team1Name, setTeam1Name] = useState("Team 1");
@@ -96,8 +98,14 @@ export function CreateWizard({
   const [playerTeam, setPlayerTeam] = useState<Record<string, "1" | "2">>({});
   /** playerId -> money amount string */
   const [playerWagers, setPlayerWagers] = useState<Record<string, string>>({});
+  /** playerId -> fractional odds */
+  const [playerOdds, setPlayerOdds] = useState<
+    Record<string, { num: string; den: string }>
+  >({});
   const [team1Wager, setTeam1Wager] = useState("10");
   const [team2Wager, setTeam2Wager] = useState("10");
+  const [team1Odds, setTeam1Odds] = useState({ num: "2", den: "1" });
+  const [team2Odds, setTeam2Odds] = useState({ num: "2", den: "1" });
   const [myBetWager, setMyBetWager] = useState("10");
   const [format, setFormat] = useState("single_elim");
   const [bracketSize, setBracketSize] = useState("");
@@ -150,7 +158,7 @@ export function CreateWizard({
     if (intent === "bet") {
       return ["Wager", "Describe the bet", "Who's in", "Your wager"];
     }
-    return ["Wager", "Pick the game", "Who's playing", "Stake"];
+    return ["Wager", "Pick the game", "Who's playing", "Stake & odds"];
   }, [intent]);
 
   const maxStep = steps.length - 1;
@@ -207,6 +215,16 @@ export function CreateWizard({
     });
   }
 
+  function ensurePlayerOdds(ids: string[]) {
+    setPlayerOdds((prev) => {
+      const next: Record<string, { num: string; den: string }> = {};
+      for (const id of ids) {
+        next[id] = prev[id] ?? { num: "2", den: "1" };
+      }
+      return next;
+    });
+  }
+
   function validateCustomWagers(): string | null {
     if (wagerMode !== "custom") return null;
     if (wagerScope === "team") {
@@ -230,6 +248,35 @@ export function CreateWizard({
       );
       if (missing.length) {
         return "Enter a money amount greater than 0 for every player.";
+      }
+    }
+    return null;
+  }
+
+  function validateOdds(): string | null {
+    if (wagerMode !== "odds") return null;
+    if (!(Number(stake) > 0)) {
+      return "Enter a stake greater than 0 for odds lines.";
+    }
+    if (wagerScope === "team") {
+      const missing = selectedPlayerIds.filter((id) => !playerTeam[id]);
+      if (missing.length) return "Assign every player to a team.";
+      for (const [label, odds] of [
+        [team1Name || "Team 1", team1Odds],
+        [team2Name || "Team 2", team2Odds],
+      ] as const) {
+        if (!(Number(odds.num) > 0) || !(Number(odds.den) > 0)) {
+          return `Set odds for ${label} (e.g. 2 / 1).`;
+        }
+      }
+    } else {
+      for (const id of selectedPlayerIds) {
+        const odds = playerOdds[id] ?? { num: "2", den: "1" };
+        if (!(Number(odds.num) > 0) || !(Number(odds.den) > 0)) {
+          const name =
+            users.find((u) => u.id === id)?.display_name ?? "Player";
+          return `Set odds for ${name} (e.g. 2 / 1).`;
+        }
       }
     }
     return null;
@@ -357,6 +404,11 @@ export function CreateWizard({
             setError(customError);
             return;
           }
+          const oddsError = validateOdds();
+          if (oddsError) {
+            setError(oddsError);
+            return;
+          }
           fd.set("kind", matchKind);
           fd.set("title", title.trim());
           fd.set("catalog_id", catalogId);
@@ -372,19 +424,37 @@ export function CreateWizard({
           for (const id of selectedPlayerIds) {
             fd.append("player_id", id);
           }
-          if (wagerMode === "custom") {
+          if (wagerMode === "custom" || wagerMode === "odds") {
             fd.set("wager_scope", wagerScope);
             if (wagerScope === "team") {
               fd.set("team_1_name", team1Name.trim() || "Team 1");
               fd.set("team_2_name", team2Name.trim() || "Team 2");
-              fd.set("wager_team_1", team1Wager);
-              fd.set("wager_team_2", team2Wager);
               for (const id of selectedPlayerIds) {
                 fd.set(`player_team_${id}`, playerTeam[id] ?? "1");
               }
+            }
+          }
+          if (wagerMode === "custom") {
+            if (wagerScope === "team") {
+              fd.set("wager_team_1", team1Wager);
+              fd.set("wager_team_2", team2Wager);
             } else {
               for (const id of selectedPlayerIds) {
                 fd.set(`wager_player_${id}`, playerWagers[id] ?? "0");
+              }
+            }
+          }
+          if (wagerMode === "odds") {
+            if (wagerScope === "team") {
+              fd.set("odds_team_1_num", team1Odds.num);
+              fd.set("odds_team_1_den", team1Odds.den);
+              fd.set("odds_team_2_num", team2Odds.num);
+              fd.set("odds_team_2_den", team2Odds.den);
+            } else {
+              for (const id of selectedPlayerIds) {
+                const odds = playerOdds[id] ?? { num: "2", den: "1" };
+                fd.set(`odds_player_${id}_num`, odds.num);
+                fd.set(`odds_player_${id}_den`, odds.den);
               }
             }
           }
@@ -855,6 +925,11 @@ export function CreateWizard({
                     "Equal pot",
                     `Everyone puts in ${stake || "10"} money`,
                   ],
+                  [
+                    "odds",
+                    "Odds",
+                    "Fractional odds per player or team (e.g. 2 to 1)",
+                  ],
                   ["none", "No wager", "Just track who won"],
                 ] as const
               ).map(([value, label, desc]) => (
@@ -864,6 +939,10 @@ export function CreateWizard({
                   onClick={() => {
                     setWagerMode(value);
                     setShowCustom(false);
+                    if (value === "odds") {
+                      ensurePlayerOdds(selectedPlayerIds);
+                      ensureTeamAssignments(selectedPlayerIds);
+                    }
                   }}
                   className={wagerMode === value ? choiceActive : choiceClass}
                 >
@@ -873,9 +952,13 @@ export function CreateWizard({
               ))}
             </div>
 
-            {wagerMode === "pot" && (
+            {(wagerMode === "pot" || wagerMode === "odds") && (
               <label className="block">
-                <span className={labelClass}>Stake per player (money)</span>
+                <span className={labelClass}>
+                  {wagerMode === "odds"
+                    ? "Stake on each odds line (money)"
+                    : "Stake per player (money)"}
+                </span>
                 <input
                   type="number"
                   min={0}
@@ -884,6 +967,225 @@ export function CreateWizard({
                   className={inputClass}
                 />
               </label>
+            )}
+
+            {wagerMode === "odds" && (
+              <div className="space-y-4 border-t border-line pt-4">
+                <fieldset>
+                  <legend className={labelClass}>Odds by</legend>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        ["player", "Each player"],
+                        ["team", "Teams"],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => {
+                          setWagerScope(value);
+                          if (value === "team") {
+                            ensureTeamAssignments(selectedPlayerIds);
+                          } else {
+                            ensurePlayerOdds(selectedPlayerIds);
+                          }
+                        }}
+                        className={
+                          wagerScope === value ? choiceActive : choiceClass
+                        }
+                      >
+                        <p className="font-medium">{label}</p>
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+                <p className="text-sm text-muted">
+                  Enter fractional odds like 2 / 1. Opposite side puts up the
+                  liability if that line wins.
+                </p>
+                {wagerScope === "player" ? (
+                  <ul className="space-y-3">
+                    {selectedPlayerIds.map((id) => {
+                      const name =
+                        users.find((u) => u.id === id)?.display_name ??
+                        "Player";
+                      const odds = playerOdds[id] ?? { num: "2", den: "1" };
+                      return (
+                        <li
+                          key={id}
+                          className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                        >
+                          <span className="min-w-0 flex-1 break-words font-medium">
+                            {name}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={1}
+                              value={odds.num}
+                              onChange={(e) =>
+                                setPlayerOdds((prev) => ({
+                                  ...prev,
+                                  [id]: { ...odds, num: e.target.value },
+                                }))
+                              }
+                              className="w-16 rounded-sm border border-line bg-bg-elevated px-2 py-2 text-base outline-none focus:border-accent sm:text-sm"
+                              aria-label={`${name} odds numerator`}
+                            />
+                            <span className="text-muted">/</span>
+                            <input
+                              type="number"
+                              min={1}
+                              value={odds.den}
+                              onChange={(e) =>
+                                setPlayerOdds((prev) => ({
+                                  ...prev,
+                                  [id]: { ...odds, den: e.target.value },
+                                }))
+                              }
+                              className="w-16 rounded-sm border border-line bg-bg-elevated px-2 py-2 text-base outline-none focus:border-accent sm:text-sm"
+                              aria-label={`${name} odds denominator`}
+                            />
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <span className={labelClass}>Team 1 name</span>
+                        <input
+                          value={team1Name}
+                          onChange={(e) => setTeam1Name(e.target.value)}
+                          className={inputClass}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className={labelClass}>Team 2 name</span>
+                        <input
+                          value={team2Name}
+                          onChange={(e) => setTeam2Name(e.target.value)}
+                          className={inputClass}
+                        />
+                      </label>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <span className={labelClass}>
+                          {team1Name || "Team 1"} odds
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={1}
+                            value={team1Odds.num}
+                            onChange={(e) =>
+                              setTeam1Odds((o) => ({
+                                ...o,
+                                num: e.target.value,
+                              }))
+                            }
+                            className={inputClass}
+                          />
+                          <span className="text-muted">/</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={team1Odds.den}
+                            onChange={(e) =>
+                              setTeam1Odds((o) => ({
+                                ...o,
+                                den: e.target.value,
+                              }))
+                            }
+                            className={inputClass}
+                          />
+                        </div>
+                      </label>
+                      <label className="block">
+                        <span className={labelClass}>
+                          {team2Name || "Team 2"} odds
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={1}
+                            value={team2Odds.num}
+                            onChange={(e) =>
+                              setTeam2Odds((o) => ({
+                                ...o,
+                                num: e.target.value,
+                              }))
+                            }
+                            className={inputClass}
+                          />
+                          <span className="text-muted">/</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={team2Odds.den}
+                            onChange={(e) =>
+                              setTeam2Odds((o) => ({
+                                ...o,
+                                den: e.target.value,
+                              }))
+                            }
+                            className={inputClass}
+                          />
+                        </div>
+                      </label>
+                    </div>
+                    <div>
+                      <p className={`${labelClass} mb-2`}>Assign players</p>
+                      <ul className="space-y-2">
+                        {selectedPlayerIds.map((id) => {
+                          const name =
+                            users.find((u) => u.id === id)?.display_name ??
+                            "Player";
+                          const slot = playerTeam[id] ?? "1";
+                          return (
+                            <li
+                              key={id}
+                              className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                            >
+                              <span className="font-medium">{name}</span>
+                              <div className="flex gap-1">
+                                {(
+                                  [
+                                    ["1", team1Name || "Team 1"],
+                                    ["2", team2Name || "Team 2"],
+                                  ] as const
+                                ).map(([value, label]) => (
+                                  <button
+                                    key={value}
+                                    type="button"
+                                    onClick={() =>
+                                      setPlayerTeam((prev) => ({
+                                        ...prev,
+                                        [id]: value,
+                                      }))
+                                    }
+                                    className={`rounded-sm border px-3 py-1.5 text-xs transition ${
+                                      slot === value
+                                        ? "border-accent bg-accent/10 text-fg"
+                                        : "border-line text-muted hover:border-accent/40"
+                                    }`}
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             <button
@@ -1109,9 +1411,11 @@ export function CreateWizard({
                   "Wager",
                   wagerMode === "custom"
                     ? `custom · ${wagerScope === "team" ? "teams" : "per player"}`
-                    : wagerMode === "pot"
-                      ? `equal pot · ${stake || 0} money`
-                      : "none",
+                    : wagerMode === "odds"
+                      ? `odds · ${wagerScope === "team" ? "teams" : "per player"} · stake ${stake || 0}`
+                      : wagerMode === "pot"
+                        ? `equal pot · ${stake || 0} money`
+                        : "none",
                 ],
                 ...(Number(entryFee) > 0
                   ? [["Entry fee", `${entryFee} money`] as [string, string]]

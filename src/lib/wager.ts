@@ -77,7 +77,7 @@ export function wagerModeLabel(mode: string): string {
     case "custom":
       return "Custom wagers";
     case "odds":
-      return "Odds (legacy)";
+      return "Odds";
     case "none":
       return "No wager";
     default:
