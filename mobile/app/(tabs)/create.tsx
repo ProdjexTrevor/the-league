@@ -23,7 +23,8 @@ import { colors, spacing } from "@/lib/theme";
 
 type Intent = "league" | "game" | "bet" | "join" | null;
 type GameStep = "details" | "players" | "odds";
-type WagerMode = "pot" | "odds" | "none";
+type BetStep = "details" | "players";
+type WagerMode = "pot" | "custom" | "odds" | "none";
 
 type CatalogGame = {
   id: string;
@@ -38,6 +39,7 @@ export default function CreateScreen() {
   const router = useRouter();
   const [intent, setIntent] = useState<Intent>(null);
   const [gameStep, setGameStep] = useState<GameStep>("details");
+  const [betStep, setBetStep] = useState<BetStep>("details");
 
   const [leagueName, setLeagueName] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -110,6 +112,7 @@ export default function CreateScreen() {
     setStake("10");
     setPlayerOdds({});
     setGameStep("details");
+    setBetStep("details");
   }
 
   function goBack() {
@@ -119,6 +122,10 @@ export default function CreateScreen() {
     }
     if (intent === "game" && gameStep === "players") {
       setGameStep("details");
+      return;
+    }
+    if (intent === "bet" && betStep === "players") {
+      setBetStep("details");
       return;
     }
     setIntent(null);
@@ -222,7 +229,10 @@ export default function CreateScreen() {
       Alert.alert("Entry fee invalid");
       return;
     }
-    if (wagerMode !== "none" && (!(Number.isFinite(stakeNum) && stakeNum > 0))) {
+    if (
+      (wagerMode === "pot" || wagerMode === "odds") &&
+      (!(Number.isFinite(stakeNum) && stakeNum > 0))
+    ) {
       Alert.alert("Stake required", "Enter a stake greater than 0.");
       return;
     }
@@ -300,6 +310,23 @@ export default function CreateScreen() {
     router.push(`/event/${event.id}`);
   }
 
+  function continueBetDetails() {
+    if (!eventTitle.trim()) {
+      Alert.alert("Title required");
+      return;
+    }
+    if (!betNotes.trim()) {
+      Alert.alert("Describe the bet");
+      return;
+    }
+    const stakeVal = Number(myBetWager);
+    if (!Number.isFinite(stakeVal) || stakeVal <= 0) {
+      Alert.alert("Enter a wager greater than 0");
+      return;
+    }
+    setBetStep("players");
+  }
+
   async function createBet() {
     if (!eventTitle.trim()) {
       Alert.alert("Title required");
@@ -312,6 +339,14 @@ export default function CreateScreen() {
     const stakeVal = Number(myBetWager);
     if (!Number.isFinite(stakeVal) || stakeVal <= 0) {
       Alert.alert("Enter a wager greater than 0");
+      return;
+    }
+    if (!currentUserId) {
+      Alert.alert("Not signed in");
+      return;
+    }
+    if (selectedPlayerIds.length < 2) {
+      Alert.alert("Invite the other side", "Select at least one other player.");
       return;
     }
     setBusy(true);
@@ -329,15 +364,6 @@ export default function CreateScreen() {
         "Bet catalog missing",
         catalogError?.message ?? "Run the bets migration on League Supabase."
       );
-      return;
-    }
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      setBusy(false);
-      Alert.alert("Not signed in");
       return;
     }
 
@@ -362,19 +388,38 @@ export default function CreateScreen() {
 
     const { error: lineError } = await supabase.from("wager_lines").insert({
       event_id: event.id,
-      player_id: user.id,
+      player_id: currentUserId,
       odds_num: 1,
       odds_den: 1,
       stake_units: stakeVal,
     });
 
-    setBusy(false);
     if (lineError) {
+      setBusy(false);
       Alert.alert("Bet created, but wager failed", lineError.message);
       router.push(`/event/${event.id}`);
       return;
     }
-    Alert.alert("Bet created", "Open the bet to invite the other side.");
+
+    for (const playerId of selectedPlayerIds) {
+      if (playerId === currentUserId) continue;
+      const { error: playerError } = await supabase.from("event_players").insert({
+        event_id: event.id,
+        user_id: playerId,
+        entry_paid: false,
+        units_paid: 0,
+        invite_status: "pending",
+      });
+      if (playerError) {
+        setBusy(false);
+        Alert.alert("Bet created, invite failed", playerError.message);
+        router.push(`/event/${event.id}`);
+        return;
+      }
+    }
+
+    setBusy(false);
+    Alert.alert("Bet created", "Invites sent. They set their stake when accepting.");
     setIntent(null);
     resetForm();
     router.push(`/event/${event.id}`);
@@ -449,13 +494,17 @@ export default function CreateScreen() {
                       ? "Add players"
                       : "Set odds"
                   : intent === "bet"
-                    ? "Single bet"
+                    ? betStep === "details"
+                      ? "Single bet"
+                      : "Invite the other side"
                     : "Join a league"}
             </Text>
             <Muted>
               {intent === "game"
                 ? `Step ${gameStep === "details" ? 1 : gameStep === "players" ? 2 : 3} of 3`
-                : "Part of the Wager workflow."}
+                : intent === "bet"
+                  ? `Step ${betStep === "details" ? 1 : 2} of 2`
+                  : "Part of the Wager workflow."}
             </Muted>
 
             {intent === "league" && (
@@ -593,6 +642,7 @@ export default function CreateScreen() {
                   {(
                     [
                       ["pot", "Equal pot", `Everyone puts in ${stake || "10"}`],
+                      ["custom", "Custom", "Each player puts up their own amount"],
                       ["odds", "Odds", "Fractional odds per player"],
                       ["none", "No wager", "Just track who won"],
                     ] as const
@@ -611,7 +661,7 @@ export default function CreateScreen() {
                   ))}
                 </View>
 
-                {wagerMode !== "none" && (
+                {(wagerMode === "pot" || wagerMode === "odds") && (
                   <Field
                     label={
                       wagerMode === "odds"
@@ -622,6 +672,12 @@ export default function CreateScreen() {
                     value={stake}
                     onChangeText={setStake}
                   />
+                )}
+
+                {wagerMode === "custom" && (
+                  <Muted style={{ marginTop: 8 }}>
+                    After creating, add each player’s stake on the game screen.
+                  </Muted>
                 )}
 
                 {wagerMode === "odds" && (
@@ -675,7 +731,7 @@ export default function CreateScreen() {
               </>
             )}
 
-            {intent === "bet" && (
+            {intent === "bet" && betStep === "details" && (
               <>
                 <Field
                   label="Title"
@@ -697,7 +753,55 @@ export default function CreateScreen() {
                   onChangeText={setMyBetWager}
                 />
                 <PrimaryButton
-                  label={busy ? "Working…" : "Create bet"}
+                  label="Continue"
+                  onPress={continueBetDetails}
+                  disabled={busy}
+                  style={{ marginTop: 16, alignSelf: "flex-start" }}
+                />
+              </>
+            )}
+
+            {intent === "bet" && betStep === "players" && (
+              <>
+                <Muted>
+                  Invite who you’re betting against. They accept and set their
+                  own stake. Then settle win / loss on the bet screen.
+                </Muted>
+                <Field
+                  label="Search players"
+                  value={playerSearch}
+                  onChangeText={setPlayerSearch}
+                  placeholder="Search…"
+                />
+                <View style={styles.choices}>
+                  {filteredPlayers.map((u) => {
+                    const checked = selectedPlayerIds.includes(u.id);
+                    const locked = u.id === currentUserId;
+                    return (
+                      <Pressable
+                        key={u.id}
+                        disabled={locked}
+                        onPress={() => togglePlayer(u.id)}
+                        style={[
+                          styles.choice,
+                          checked && styles.choiceActive,
+                          locked && { opacity: 0.9 },
+                        ]}
+                      >
+                        <Text style={styles.choiceLabel}>
+                          {u.display_name}
+                          {locked ? " (you)" : ""}
+                        </Text>
+                        <Text style={styles.choiceDesc}>
+                          {checked ? "Selected" : "Tap to invite"}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Muted>Selected: {selectedPlayerIds.length}</Muted>
+                <PrimaryButton
+                  label={busy ? "Creating…" : "Create bet & send invites"}
                   onPress={() => void createBet()}
                   disabled={busy}
                   style={{ marginTop: 16, alignSelf: "flex-start" }}

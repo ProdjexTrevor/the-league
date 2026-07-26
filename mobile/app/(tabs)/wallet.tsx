@@ -12,16 +12,18 @@ import {
 
 import {
   BrandTitle,
+  Field,
   ListRow,
   ListSection,
   Muted,
+  PrimaryButton,
   Screen,
   SectionTitle,
 } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { colors, spacing } from "@/lib/theme";
-import { formatMoney, venmoPayUrl } from "@/lib/venmo";
+import { formatMoney, normalizeVenmoUsername, venmoPayUrl } from "@/lib/venmo";
 
 type Obligation = {
   id: string;
@@ -40,6 +42,8 @@ export default function WalletScreen() {
   const [owed, setOwed] = useState<Obligation[]>([]);
   const [owedToMe, setOwedToMe] = useState<Obligation[]>([]);
   const [venmo, setVenmo] = useState<string | null>(null);
+  const [venmoDraft, setVenmoDraft] = useState("");
+  const [savingVenmo, setSavingVenmo] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -53,7 +57,9 @@ export default function WalletScreen() {
         .or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`),
     ]);
 
-    setVenmo(me?.venmo_username ?? null);
+    const username = me?.venmo_username ?? null;
+    setVenmo(username);
+    setVenmoDraft(username ?? "");
 
     if (error) {
       setLoading(false);
@@ -93,6 +99,28 @@ export default function WalletScreen() {
     }, [load])
   );
 
+  async function saveVenmo() {
+    if (!user) return;
+    const next = normalizeVenmoUsername(venmoDraft);
+    if (!next) {
+      Alert.alert("Venmo username required");
+      return;
+    }
+    setSavingVenmo(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ venmo_username: next })
+      .eq("id", user.id);
+    setSavingVenmo(false);
+    if (error) {
+      Alert.alert("Couldn’t save Venmo", error.message);
+      return;
+    }
+    setVenmo(next);
+    setVenmoDraft(next);
+    Alert.alert("Saved", `Venmo @${next}`);
+  }
+
   async function markPaid(id: string) {
     const { error } = await supabase
       .from("wallet_obligations")
@@ -130,7 +158,8 @@ export default function WalletScreen() {
           <BrandTitle size="md" />
         </Pressable>
         <Muted>
-          {venmo ? `Venmo @${venmo}` : "Add Venmo on the web app if missing."}
+          Track what you owe after settled games. Pay opens Venmo with their
+          username filled in.
         </Muted>
 
         <View
@@ -152,6 +181,22 @@ export default function WalletScreen() {
             <Text style={statValue}>{formatMoney(totalDue)}</Text>
           </View>
         </View>
+
+        <SectionTitle>Your Venmo</SectionTitle>
+        <Field
+          label="Username"
+          autoCapitalize="none"
+          autoCorrect={false}
+          value={venmoDraft}
+          onChangeText={setVenmoDraft}
+          placeholder={venmo ? `@${venmo}` : "@yourname"}
+        />
+        <PrimaryButton
+          label={savingVenmo ? "Saving…" : "Save Venmo"}
+          onPress={() => void saveVenmo()}
+          disabled={savingVenmo}
+          style={{ marginTop: 12, alignSelf: "flex-start" }}
+        />
 
         {loading ? (
           <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
