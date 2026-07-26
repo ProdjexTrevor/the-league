@@ -846,7 +846,7 @@ export default function EventDetailScreen() {
 
           {event.status === "completed" ? (
             <Muted style={{ marginTop: 8 }}>
-              Settled. Check Wallet for any Venmo IOUs.
+              Settled. Open Wallet to see Venmo IOUs when money changed hands.
             </Muted>
           ) : null}
 

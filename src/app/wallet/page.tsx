@@ -17,26 +17,32 @@ export default async function WalletPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/wallet");
 
+  // Heal missing IOUs from completed games (safe / idempotent for open rows)
+  await supabase.rpc("repair_my_wallet_obligations");
+
   const { data: me } = await supabase
     .from("profiles")
     .select("display_name, venmo_username")
     .eq("id", user.id)
     .single();
 
-  const [{ data: owedRows }, { data: dueRows }] = await Promise.all([
-    supabase
-      .from("wallet_obligations")
-      .select("id, to_user_id, amount, event_id, status, events(title)")
-      .eq("from_user_id", user.id)
-      .eq("status", "open")
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("wallet_obligations")
-      .select("id, from_user_id, amount, event_id, status, events(title)")
-      .eq("to_user_id", user.id)
-      .eq("status", "open")
-      .order("created_at", { ascending: false }),
-  ]);
+  const [{ data: owedRows, error: owedError }, { data: dueRows, error: dueError }] =
+    await Promise.all([
+      supabase
+        .from("wallet_obligations")
+        .select("id, to_user_id, amount, event_id, status, events(title)")
+        .eq("from_user_id", user.id)
+        .eq("status", "open")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("wallet_obligations")
+        .select("id, from_user_id, amount, event_id, status, events(title)")
+        .eq("to_user_id", user.id)
+        .eq("status", "open")
+        .order("created_at", { ascending: false }),
+    ]);
+
+  const walletError = owedError?.message ?? dueError?.message ?? null;
 
   // Aggregate by counterparty for pay buttons
   const owedByPerson = new Map<
@@ -100,6 +106,11 @@ export default async function WalletPage() {
         Track what you owe after settled games. Pay opens Venmo with their
         username filled in.
       </p>
+      {walletError ? (
+        <p className="mt-4 text-sm text-danger">
+          Couldn’t load wallet: {walletError}
+        </p>
+      ) : null}
 
       <section className="mt-10 grid gap-4 sm:grid-cols-2">
         <div className="rounded-sm border border-line px-4 py-4">

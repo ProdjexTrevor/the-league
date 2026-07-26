@@ -48,6 +48,7 @@ export default function WalletScreen() {
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+    await supabase.rpc("repair_my_wallet_obligations");
     const [{ data: me }, { data, error }] = await Promise.all([
       supabase.from("profiles").select("venmo_username").eq("id", user.id).maybeSingle(),
       supabase

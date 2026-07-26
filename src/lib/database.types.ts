@@ -388,6 +388,10 @@ export type Database = {
         Args: { p_event_id: string };
         Returns: undefined;
       };
+      repair_my_wallet_obligations: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

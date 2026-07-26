@@ -27,6 +27,24 @@ export async function settleEvent(
     return { error: eventLoadError?.message ?? "Event not found." };
   }
   if (event.status === "completed") {
+    const { data: existing } = await supabase
+      .from("wallet_obligations")
+      .select("id")
+      .eq("event_id", eventId)
+      .limit(1);
+    if (!existing?.length) {
+      const { error: repairError } = await supabase.rpc(
+        "record_event_obligations",
+        { p_event_id: eventId }
+      );
+      if (repairError) {
+        return { error: repairError.message };
+      }
+      return {
+        error:
+          "Already settled. Missing wallet IOUs were created — check Wallet.",
+      };
+    }
     return { error: "Already settled." };
   }
 
@@ -259,6 +277,27 @@ export async function settleEvent(
     }
   }
 
+  for (const [uid, raw] of deltas) {
+    deltas.set(uid, Math.round(raw * 100) / 100);
+  }
+
+  const moneyConfigured =
+    entryFee > 0 ||
+    (wagerMode === "pot" && stake > 0) ||
+    wagerMode === "custom" ||
+    wagerMode === "odds";
+  const moneyMoved = [...deltas.values()].some((d) => d !== 0);
+  if (
+    moneyConfigured &&
+    !moneyMoved &&
+    (wagerMode === "custom" || wagerMode === "odds")
+  ) {
+    return {
+      error:
+        "No money moved. Add stake/odds lines for every side before settling.",
+    };
+  }
+
   for (const r of results) {
     const { error } = await supabase
       .from("event_players")
@@ -273,6 +312,11 @@ export async function settleEvent(
     if (error) return { error: error.message };
   }
 
+  const { error: obligError } = await supabase.rpc("record_event_obligations", {
+    p_event_id: eventId,
+  });
+  if (obligError) return { error: obligError.message };
+
   const { error: eventError } = await supabase
     .from("events")
     .update({
@@ -282,11 +326,6 @@ export async function settleEvent(
     .eq("id", eventId);
 
   if (eventError) return { error: eventError.message };
-
-  const { error: obligError } = await supabase.rpc("record_event_obligations", {
-    p_event_id: eventId,
-  });
-  if (obligError) return { error: obligError.message };
 
   return { error: null };
 }

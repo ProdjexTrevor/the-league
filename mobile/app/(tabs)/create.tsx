@@ -230,7 +230,7 @@ export default function CreateScreen() {
       return;
     }
     if (
-      (wagerMode === "pot" || wagerMode === "odds") &&
+      (wagerMode === "pot" || wagerMode === "odds" || wagerMode === "custom") &&
       (!(Number.isFinite(stakeNum) && stakeNum > 0))
     ) {
       Alert.alert("Stake required", "Enter a stake greater than 0.");
@@ -300,6 +300,22 @@ export default function CreateScreen() {
           router.push(`/event/${event.id}`);
           return;
         }
+      }
+    }
+
+    if (wagerMode === "custom" && currentUserId) {
+      const { error: lineError } = await supabase.from("wager_lines").insert({
+        event_id: event.id,
+        player_id: currentUserId,
+        odds_num: 1,
+        odds_den: 1,
+        stake_units: stakeNum,
+      });
+      if (lineError) {
+        setBusy(false);
+        Alert.alert("Game created, stake failed", lineError.message);
+        router.push(`/event/${event.id}`);
+        return;
       }
     }
 
@@ -703,9 +719,19 @@ export default function CreateScreen() {
                 )}
 
                 {wagerMode === "custom" && (
-                  <Muted style={{ marginTop: 8 }}>
-                    After creating, add each player’s stake on the game screen.
-                  </Muted>
+                  <>
+                    <Muted style={{ marginTop: 8 }}>
+                      Enter each player’s stake now (or add lines on the game
+                      screen before settling).
+                    </Muted>
+                    <Field
+                      label="Your stake (others can be set on the game)"
+                      keyboardType="decimal-pad"
+                      value={stake}
+                      onChangeText={setStake}
+                      placeholder="10"
+                    />
+                  </>
                 )}
 
                 {wagerMode === "odds" && (

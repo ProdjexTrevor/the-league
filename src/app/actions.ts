@@ -541,7 +541,25 @@ export async function settleEvent(eventId: string, formData: FormData) {
     .single();
 
   if (!event) fail("Event not found.");
-  if (event.status === "completed") fail("Already settled.");
+  if (event.status === "completed") {
+    // Repair path: completed event with money but never wrote wallet rows
+    const { data: existing } = await supabase
+      .from("wallet_obligations")
+      .select("id")
+      .eq("event_id", eventId)
+      .limit(1);
+    if (!existing?.length) {
+      const { error: repairError } = await supabase.rpc(
+        "record_event_obligations",
+        { p_event_id: eventId }
+      );
+      if (repairError) fail(repairError.message);
+      revalidatePath("/wallet");
+      revalidatePath(`/events/${eventId}`);
+      fail("Already settled. Missing wallet IOUs were created — check Wallet.");
+    }
+    fail("Already settled.");
+  }
 
   const { data: catalog } = await supabase
     .from("game_catalog")
@@ -766,6 +784,23 @@ export async function settleEvent(eventId: string, formData: FormData) {
     }
   }
 
+  // Round to cents so wallet IOUs match stored money deltas
+  for (const [uid, raw] of deltas) {
+    deltas.set(uid, Math.round(raw * 100) / 100);
+  }
+
+  const moneyConfigured =
+    entryFee > 0 ||
+    (wagerMode === "pot" && stake > 0) ||
+    wagerMode === "custom" ||
+    wagerMode === "odds";
+  const moneyMoved = [...deltas.values()].some((d) => d !== 0);
+  if (moneyConfigured && !moneyMoved && (wagerMode === "custom" || wagerMode === "odds")) {
+    fail(
+      "No money moved. Add stake/odds lines for every side before settling."
+    );
+  }
+
   for (const r of results) {
     const { error } = await supabase
       .from("event_players")
@@ -780,6 +815,12 @@ export async function settleEvent(eventId: string, formData: FormData) {
     if (error) fail(error.message);
   }
 
+  // Record wallet IOUs before marking completed so a failed RPC can be retried
+  const { error: obligError } = await supabase.rpc("record_event_obligations", {
+    p_event_id: eventId,
+  });
+  if (obligError) fail(obligError.message);
+
   const { error: eventError } = await supabase
     .from("events")
     .update({
@@ -789,11 +830,6 @@ export async function settleEvent(eventId: string, formData: FormData) {
     .eq("id", eventId);
 
   if (eventError) fail(eventError.message);
-
-  const { error: obligError } = await supabase.rpc("record_event_obligations", {
-    p_event_id: eventId,
-  });
-  if (obligError) fail(obligError.message);
 
   void user;
   revalidatePath(`/events/${eventId}`);
