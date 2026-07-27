@@ -55,6 +55,7 @@ export default function CreateScreen() {
   const [catalogId, setCatalogId] = useState("");
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [playerSearch, setPlayerSearch] = useState("");
+  const [gameSearch, setGameSearch] = useState("");
   const [wagerMode, setWagerMode] = useState<WagerMode>("pot");
   const [stake, setStake] = useState("10");
   const [playerOdds, setPlayerOdds] = useState<
@@ -92,6 +93,16 @@ export default function CreateScreen() {
     [catalog]
   );
 
+  const filteredGames = useMemo(() => {
+    const q = gameSearch.trim().toLowerCase();
+    if (!q) return gameCatalog;
+    return gameCatalog.filter(
+      (g) =>
+        g.name.toLowerCase().includes(q) ||
+        g.scoring_mode.toLowerCase().includes(q)
+    );
+  }, [gameCatalog, gameSearch]);
+
   const filteredPlayers = useMemo(() => {
     const q = playerSearch.trim().toLowerCase();
     if (!q) return profiles;
@@ -108,6 +119,7 @@ export default function CreateScreen() {
     setCatalogId("");
     setSelectedPlayerIds(currentUserId ? [currentUserId] : []);
     setPlayerSearch("");
+    setGameSearch("");
     setWagerMode("pot");
     setStake("10");
     setPlayerOdds({});
@@ -568,30 +580,44 @@ export default function CreateScreen() {
                 {gameCatalog.length === 0 ? (
                   <Muted>No catalog games yet. Add them on the web app.</Muted>
                 ) : (
-                  <ScrollView
-                    style={styles.choicesScroll}
-                    contentContainerStyle={styles.choicesScrollContent}
-                    nestedScrollEnabled
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator
-                  >
-                    {gameCatalog.map((g) => (
-                      <Pressable
-                        key={g.id}
-                        onPress={() => {
-                          setCatalogId(g.id);
-                          setEventTitle((t) => t || g.name);
-                        }}
-                        style={[
-                          styles.choice,
-                          catalogId === g.id && styles.choiceActive,
-                        ]}
-                      >
-                        <Text style={styles.choiceLabel}>{g.name}</Text>
-                        <Text style={styles.choiceDesc}>{g.scoring_mode}</Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
+                  <>
+                    <Field
+                      label="Search games"
+                      value={gameSearch}
+                      onChangeText={setGameSearch}
+                      placeholder="Search yard, bar, card games…"
+                    />
+                    <ScrollView
+                      style={styles.choicesScroll}
+                      contentContainerStyle={styles.choicesScrollContent}
+                      nestedScrollEnabled
+                      keyboardShouldPersistTaps="handled"
+                      showsVerticalScrollIndicator
+                    >
+                      {filteredGames.length === 0 ? (
+                        <Muted>No games match that search.</Muted>
+                      ) : (
+                        filteredGames.map((g) => (
+                          <Pressable
+                            key={g.id}
+                            onPress={() => {
+                              setCatalogId(g.id);
+                              setEventTitle((t) => t || g.name);
+                            }}
+                            style={[
+                              styles.choice,
+                              catalogId === g.id && styles.choiceActive,
+                            ]}
+                          >
+                            <Text style={styles.choiceLabel}>{g.name}</Text>
+                            <Text style={styles.choiceDesc}>
+                              {g.scoring_mode}
+                            </Text>
+                          </Pressable>
+                        ))
+                      )}
+                    </ScrollView>
+                  </>
                 )}
                 <Field
                   label="Title"

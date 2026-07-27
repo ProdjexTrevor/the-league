@@ -116,6 +116,7 @@ export function CreateWizard({
     currentUserId,
   ]);
   const [playerSearch, setPlayerSearch] = useState("");
+  const [gameSearch, setGameSearch] = useState("");
 
   const [inviteCode, setInviteCode] = useState("");
 
@@ -148,6 +149,24 @@ export function CreateWizard({
       u.display_name.toLowerCase().includes(q)
     );
   }, [availablePlayers, playerSearch]);
+
+  const matchCatalog = useMemo(
+    () => catalog.filter((g) => g.slug !== "proposition"),
+    [catalog]
+  );
+
+  const filteredGames = useMemo(() => {
+    const q = gameSearch.trim().toLowerCase();
+    if (!q) return matchCatalog;
+    return matchCatalog.filter(
+      (g) =>
+        g.name.toLowerCase().includes(q) ||
+        (g.description?.toLowerCase().includes(q) ?? false) ||
+        scoringModeLabel(g.scoring_mode as ScoringMode)
+          .toLowerCase()
+          .includes(q)
+    );
+  }, [matchCatalog, gameSearch]);
 
   const steps = useMemo(() => {
     if (!intent) return ["Wager"];
@@ -632,15 +651,27 @@ export function CreateWizard({
 
         {intent === "match" && step === 1 && (
           <div className="animate-rise space-y-5">
+            <label className="block">
+              <span className={labelClass}>Search games</span>
+              <input
+                type="search"
+                value={gameSearch}
+                onChange={(e) => setGameSearch(e.target.value)}
+                placeholder="Search yard, bar, card games…"
+                className={inputClass}
+              />
+            </label>
             <div className="max-h-[240px] space-y-2 overflow-y-auto pr-1">
-              {catalog.filter((g) => g.slug !== "proposition").length === 0 ? (
+              {matchCatalog.length === 0 ? (
                 <p className="text-sm text-danger">
                   Catalog is empty. Run the competitions SQL migration first.
                 </p>
+              ) : filteredGames.length === 0 ? (
+                <p className="text-sm text-muted">
+                  No games match “{gameSearch.trim()}”.
+                </p>
               ) : (
-                catalog
-                  .filter((g) => g.slug !== "proposition")
-                  .map((g) => (
+                filteredGames.map((g) => (
                   <button
                     key={g.id}
                     type="button"

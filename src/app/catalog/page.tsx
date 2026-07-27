@@ -2,8 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { createCustomGame } from "@/app/actions";
+import { CatalogGameList } from "@/components/catalog-game-list";
 import { createClient } from "@/lib/supabase/server";
-import { scoringModeLabel, type ScoringMode } from "@/lib/wager";
 
 export const dynamic = "force-dynamic";
 
@@ -73,17 +73,9 @@ export default async function CatalogPage() {
       {customGames.length > 0 && (
         <section className="mt-14">
           <h2 className="text-lg font-semibold">Custom games</h2>
-          <ul className="mt-4 divide-y divide-line border-y border-line">
-            {customGames.map((g) => (
-              <li key={g.id} className="py-4">
-                <p className="font-medium">{g.name}</p>
-                <p className="mt-1 text-sm text-muted">
-                  {scoringModeLabel(g.scoring_mode as ScoringMode)}
-                  {g.description ? ` · ${g.description}` : ""}
-                </p>
-              </li>
-            ))}
-          </ul>
+          <div className="mt-4">
+            <CatalogGameList games={customGames} />
+          </div>
         </section>
       )}
 
@@ -96,17 +88,9 @@ export default async function CatalogPage() {
             in Supabase.
           </p>
         ) : (
-          <ul className="mt-4 divide-y divide-line border-y border-line">
-            {systemGames.map((g) => (
-              <li key={g.id} className="py-4">
-                <p className="font-medium">{g.name}</p>
-                <p className="mt-1 text-sm text-muted">
-                  {scoringModeLabel(g.scoring_mode as ScoringMode)}
-                  {g.description ? ` · ${g.description}` : ""}
-                </p>
-              </li>
-            ))}
-          </ul>
+          <div className="mt-4">
+            <CatalogGameList games={systemGames} />
+          </div>
         )}
       </section>
     </main>
