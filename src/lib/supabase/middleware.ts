@@ -3,6 +3,20 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getSupabaseEnv } from "@/lib/supabase/env";
 
+/** Vercel Edge middleware must return well under the platform limit. */
+const AUTH_FETCH_MS = 4_000;
+
+function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<Response> {
+  const timeout = AbortSignal.timeout(AUTH_FETCH_MS);
+  const signal = init?.signal
+    ? AbortSignal.any([init.signal, timeout])
+    : timeout;
+  return fetch(input, { ...init, signal });
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -12,6 +26,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   const supabase = createServerClient(env.url, env.anonKey, {
+    global: {
+      fetch: fetchWithTimeout,
+    },
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -28,9 +45,14 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user: { id: string } | null = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch {
+    // Supabase paused/unreachable/slow → treat as logged out, never hang to 504.
+    user = null;
+  }
 
   const path = request.nextUrl.pathname;
   const isProtected =
