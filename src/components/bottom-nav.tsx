@@ -46,6 +46,20 @@ function IconBet() {
   );
 }
 
+function IconFriends({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M16 11a3.5 3.5 0 1 0-3.4-4.2M8.5 13A3.5 3.5 0 1 0 8.5 6a3.5 3.5 0 0 0 0 7ZM3.5 19.5c.6-2.6 2.7-4 5-4s4.4 1.4 5 4M13.5 15.5c1.7-.4 3.6.2 4.5 2.5"
+        stroke="currentColor"
+        strokeWidth={active ? 2.2 : 1.7}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function IconStats({ active }: { active: boolean }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -66,6 +80,7 @@ export function BottomNav({ userId }: Props) {
   const wallet = pathname.startsWith("/wallet");
   const bet =
     pathname.startsWith("/bet") || pathname.startsWith("/create");
+  const friends = pathname.startsWith("/friends");
   const stats = pathname.startsWith("/players");
 
   const tab = (active: boolean) =>
@@ -77,7 +92,7 @@ export function BottomNav({ userId }: Props) {
       style={{ paddingBottom: "max(env(safe-area-inset-bottom), 8px)" }}
       aria-label="Main"
     >
-      <div className="mx-auto grid max-w-lg grid-cols-4 items-end px-1 pt-1">
+      <div className="mx-auto grid max-w-lg grid-cols-5 items-end px-0.5 pt-1">
         <Link
           href="/app"
           className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide ${tab(home)}`}
@@ -102,6 +117,14 @@ export function BottomNav({ userId }: Props) {
             <IconBet />
           </span>
           <span className="text-accent">Bet</span>
+        </Link>
+
+        <Link
+          href="/friends"
+          className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide ${tab(friends)}`}
+        >
+          <IconFriends active={friends} />
+          Friends
         </Link>
 
         <Link

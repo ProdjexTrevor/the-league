@@ -7,7 +7,12 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-export default async function BetPage() {
+type Props = {
+  searchParams: Promise<{ against?: string }>;
+};
+
+export default async function BetPage({ searchParams }: Props) {
+  const { against } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -68,6 +73,7 @@ export default async function BetPage() {
           catalogId={catalogId}
           opponents={opponents}
           showHeading={false}
+          defaultAgainstId={against ?? ""}
         />
       ) : (
         <p className="text-sm text-muted">

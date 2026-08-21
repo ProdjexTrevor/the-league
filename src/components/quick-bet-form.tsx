@@ -21,10 +21,12 @@ export function QuickBetForm({
   catalogId,
   opponents,
   showHeading = true,
+  defaultAgainstId = "",
 }: {
   catalogId: string;
   opponents: Opponent[];
   showHeading?: boolean;
+  defaultAgainstId?: string;
 }) {
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -94,8 +96,17 @@ export function QuickBetForm({
 
         <label className="block text-sm">
           <span className="text-muted">Against</span>
-          <select name="against_id" required defaultValue="" className={field}>
-            <option value="" disabled>
+          <select
+            name="against_id"
+            required
+            defaultValue={
+              defaultAgainstId &&
+              opponents.some((o) => o.id === defaultAgainstId)
+                ? defaultAgainstId
+                : ""
+            }
+            className={field}
+          >            <option value="" disabled>
               Pick a friend
             </option>
             {opponents.map((o) => (

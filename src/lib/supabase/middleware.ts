@@ -60,6 +60,7 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/bet") ||
     path.startsWith("/create") ||
     path.startsWith("/wallet") ||
+    path.startsWith("/friends") ||
     path.startsWith("/leagues") ||
     path.startsWith("/events") ||
     path.startsWith("/players") ||
