@@ -113,7 +113,7 @@ export function BottomNav({ userId }: Props) {
           href="/bet"
           className="relative flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-ink"
         >
-          <span className="-mt-5 flex h-14 w-14 items-center justify-center rounded-full bg-accent shadow-[0_8px_24px_rgba(200,245,74,0.35)]">
+          <span className="-mt-5 flex h-14 w-14 items-center justify-center rounded-full bg-accent shadow-[0_6px_18px_rgba(200,245,74,0.28)]">
             <IconBet />
           </span>
           <span className="text-accent">Bet</span>

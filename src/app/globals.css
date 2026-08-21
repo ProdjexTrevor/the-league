@@ -1,15 +1,14 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #07110c;
-  --bg-elevated: #0f1a14;
+  --bg: #0a100c;
+  --bg-elevated: #121a15;
   --fg: #f2f7f1;
   --muted: #8b9a90;
   --accent: #c8f54a;
-  --accent-ink: #07110c;
+  --accent-ink: #0a100c;
   --line: rgba(242, 247, 241, 0.1);
   --danger: #ff6b5a;
-  --glow: rgba(200, 245, 74, 0.18);
 }
 
 @theme inline {
@@ -28,18 +27,26 @@
 html {
   overflow-x: clip;
   -webkit-text-size-adjust: 100%;
+  background-color: var(--bg);
 }
 
 body {
   overflow-x: clip;
-  background:
-    radial-gradient(900px 480px at 50% -8%, var(--glow), transparent 55%),
-    radial-gradient(700px 400px at 100% 20%, rgba(60, 100, 70, 0.14), transparent 50%),
-    var(--bg);
+  /* Soft top wash — no bright radial hotspot */
+  background-color: var(--bg);
+  background-image: linear-gradient(
+    180deg,
+    rgba(40, 70, 48, 0.45) 0%,
+    rgba(14, 22, 16, 0.35) 18%,
+    rgba(10, 16, 12, 0) 42%
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
   color: var(--fg);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
   padding-bottom: env(safe-area-inset-bottom);
+  min-height: 100dvh;
 }
 
 @media (max-width: 640px) {
@@ -80,8 +87,6 @@ body {
 }
 
 .net-card {
-  border: 1px solid rgba(200, 245, 74, 0.28);
-  box-shadow:
-    0 0 0 1px rgba(200, 245, 74, 0.06) inset,
-    0 0 40px rgba(200, 245, 74, 0.08);
+  border: 1px solid rgba(200, 245, 74, 0.22);
+  box-shadow: 0 0 0 1px rgba(200, 245, 74, 0.04) inset;
 }
