@@ -20,9 +20,11 @@ const PRESETS = [
 export function QuickBetForm({
   catalogId,
   opponents,
+  showHeading = true,
 }: {
   catalogId: string;
   opponents: Opponent[];
+  showHeading?: boolean;
 }) {
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +36,6 @@ export function QuickBetForm({
       try {
         await quickBet(formData);
       } catch (e) {
-        // Server actions redirect by throwing — don't surface that as a form error.
         if (
           typeof e === "object" &&
           e !== null &&
@@ -49,19 +50,23 @@ export function QuickBetForm({
   }
 
   return (
-    <section className="mt-12">
-      <h2 className="text-xl font-semibold tracking-tight">Make the bet</h2>
-      <p className="mt-1 text-sm text-muted">
-        Set the stake, set the line, shake on it.
-      </p>
+    <section className={showHeading ? "mt-2" : ""}>
+      {showHeading ? (
+        <>
+          <h2 className="text-xl font-semibold tracking-tight">Make the bet</h2>
+          <p className="mt-1 text-sm text-muted">
+            Set the stake, set the line, shake on it.
+          </p>
+        </>
+      ) : null}
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className={`${showHeading ? "mt-4" : ""} flex flex-wrap gap-2`}>
         {PRESETS.map((p) => (
           <button
             key={p.label}
             type="button"
             onClick={() => setTitle(p.title)}
-            className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+            className={`rounded-full border px-3 py-2 text-xs font-medium transition ${
               title === p.title
                 ? "border-accent bg-accent/15 text-accent"
                 : "border-line text-muted hover:border-fg/30 hover:text-fg"

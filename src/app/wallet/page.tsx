@@ -1,11 +1,10 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import {
   markCounterpartyPaid,
   updateVenmoUsername,
 } from "@/app/actions";
-import { Brand } from "@/components/brand";
+import { AppShell } from "@/components/app-shell";
 import { createClient } from "@/lib/supabase/server";
 import { venmoPayUrl } from "@/lib/venmo";
 
@@ -82,20 +81,12 @@ export default async function WalletPage() {
   const totalDue = (dueRows ?? []).reduce((s, r) => s + Number(r.amount), 0);
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-lg px-4 py-6 pb-24 sm:px-5 sm:py-8">
-      <div className="flex items-center justify-between gap-4">
-        <Brand href="/app" size="sm" />
-        <Link href="/app" className="text-sm text-muted hover:text-fg">
-          Book
-        </Link>
-      </div>
-
-      <h1 className="mt-8 text-2xl font-semibold tracking-tight">Wallet</h1>
-      <p className="mt-2 text-sm text-muted">
+    <AppShell userId={user.id} title="Wallet">
+      <p className="mb-4 text-sm text-muted">
         Pay opens Venmo with their username filled in.
       </p>
       {walletError ? (
-        <p className="mt-4 text-sm text-danger">
+        <p className="mb-4 text-sm text-danger">
           Couldn’t load wallet: {walletError}
         </p>
       ) : null}
@@ -244,6 +235,6 @@ export default async function WalletPage() {
           </ul>
         )}
       </section>
-    </main>
+    </AppShell>
   );
 }

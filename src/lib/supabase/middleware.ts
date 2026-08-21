@@ -57,10 +57,12 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isProtected =
     path.startsWith("/app") ||
+    path.startsWith("/bet") ||
     path.startsWith("/create") ||
     path.startsWith("/wallet") ||
     path.startsWith("/leagues") ||
     path.startsWith("/events") ||
+    path.startsWith("/players") ||
     path.startsWith("/catalog");
 
   if (!user && isProtected) {

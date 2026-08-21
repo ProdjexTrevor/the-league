@@ -2,8 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
-import { Brand, BrandPill } from "@/components/brand";
-import { QuickBetForm } from "@/components/quick-bet-form";
+import { BrandPill } from "@/components/brand";
 import { TheBook } from "@/components/the-book";
 import { createClient } from "@/lib/supabase/server";
 import { venmoPayUrl } from "@/lib/venmo";
@@ -33,42 +32,27 @@ export default async function AppPage() {
     .eq("id", user.id)
     .single();
 
-  const [
-    { data: memberships },
-    { data: myEvents },
-    { data: owedRows },
-    { data: dueRows },
-    { data: propCatalog },
-  ] = await Promise.all([
-    supabase
-      .from("league_members")
-      .select("role, leagues(id, name)")
-      .eq("user_id", user.id)
-      .order("joined_at", { ascending: false }),
-    supabase
-      .from("events")
-      .select(
-        "id, title, kind, status, entry_fee_units, default_stake_units, wager_mode, notes, created_at, league_id"
-      )
-      .eq("created_by", user.id)
-      .order("created_at", { ascending: false })
-      .limit(40),
-    supabase
-      .from("wallet_obligations")
-      .select("id, to_user_id, amount, events(title)")
-      .eq("from_user_id", user.id)
-      .eq("status", "open"),
-    supabase
-      .from("wallet_obligations")
-      .select("id, from_user_id, amount, events(title)")
-      .eq("to_user_id", user.id)
-      .eq("status", "open"),
-    supabase
-      .from("game_catalog")
-      .select("id")
-      .eq("slug", "proposition")
-      .maybeSingle(),
-  ]);
+  const [{ data: myEvents }, { data: owedRows }, { data: dueRows }] =
+    await Promise.all([
+      supabase
+        .from("events")
+        .select(
+          "id, title, kind, status, entry_fee_units, default_stake_units, wager_mode, notes, created_at, league_id"
+        )
+        .eq("created_by", user.id)
+        .order("created_at", { ascending: false })
+        .limit(40),
+      supabase
+        .from("wallet_obligations")
+        .select("id, to_user_id, amount, events(title)")
+        .eq("from_user_id", user.id)
+        .eq("status", "open"),
+      supabase
+        .from("wallet_obligations")
+        .select("id, from_user_id, amount, events(title)")
+        .eq("to_user_id", user.id)
+        .eq("status", "open"),
+    ]);
 
   const { data: playing } = await supabase
     .from("event_players")
@@ -78,10 +62,7 @@ export default async function AppPage() {
     .eq("user_id", user.id)
     .limit(50);
 
-  const eventMap = new Map<
-    string,
-    NonNullable<(typeof myEvents)>[number]
-  >();
+  const eventMap = new Map<string, NonNullable<(typeof myEvents)>[number]>();
   myEvents?.forEach((e) => eventMap.set(e.id, e));
   playing?.forEach((row) => {
     const e = Array.isArray(row.events) ? row.events[0] : row.events;
@@ -94,8 +75,7 @@ export default async function AppPage() {
   const liveStake = events
     .filter((e) => e.status === "open" || e.status === "in_progress")
     .reduce(
-      (s, e) =>
-        s + Number(e.default_stake_units ?? e.entry_fee_units ?? 0),
+      (s, e) => s + Number(e.default_stake_units ?? e.entry_fee_units ?? 0),
       0
     );
 
@@ -122,32 +102,6 @@ export default async function AppPage() {
     ...new Set([...owedByPerson.keys(), ...dueByPerson.keys()]),
   ];
 
-  const leagueIds =
-    memberships
-      ?.map((m) => {
-        const league = Array.isArray(m.leagues) ? m.leagues[0] : m.leagues;
-        return league?.id as string | undefined;
-      })
-      .filter(Boolean) ?? [];
-
-  const { data: roster } =
-    leagueIds.length > 0
-      ? await supabase
-          .from("league_members")
-          .select("user_id, profiles(id, display_name)")
-          .in("league_id", leagueIds as string[])
-      : { data: [] };
-
-  const opponentMap = new Map<string, { id: string; display_name: string | null }>();
-  for (const row of roster ?? []) {
-    if (row.user_id === user.id) continue;
-    const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
-    if (p?.id) opponentMap.set(p.id, p);
-  }
-  const opponents = Array.from(opponentMap.values()).sort((a, b) =>
-    (a.display_name ?? "").localeCompare(b.display_name ?? "")
-  );
-
   const { data: people } =
     personIds.length > 0
       ? await supabase
@@ -166,33 +120,27 @@ export default async function AppPage() {
       })
       .filter(Boolean) ?? [];
 
-  const catalogId = propCatalog?.id ?? "";
-
   return (
     <AppShell userId={user.id}>
-      <div className="mt-8 animate-rise">
+      <div className="animate-rise">
         <BrandPill>No bookies · just friends</BrandPill>
-        <div className="mt-4">
-          <Brand href={null} size="lg" />
-        </div>
-        <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted">
-          Hey {profile?.display_name ?? "player"}. Set the bet, set the line,
-          shake on it. We keep the receipts so nobody “forgets” who paid.
+        <p className="mt-3 text-sm text-muted">
+          Hey {profile?.display_name ?? "player"}
         </p>
       </div>
 
-      <section className="net-card animate-rise-delay mt-8 rounded-2xl bg-bg-elevated/80 px-5 py-5">
+      <section className="net-card animate-rise-delay mt-5 rounded-2xl bg-bg-elevated/80 px-4 py-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
           Net position
         </p>
         <p
-          className={`mt-2 font-display text-5xl ${
+          className={`mt-1 font-display text-4xl ${
             net >= 0 ? "text-accent" : "text-danger"
           }`}
         >
           {money(net)}
         </p>
-        <p className="mt-2 text-sm text-muted">
+        <p className="mt-1 text-sm text-muted">
           {liveStake > 0
             ? `$${liveStake.toFixed(0)} still live`
             : "No live stakes"}
@@ -200,15 +148,15 @@ export default async function AppPage() {
       </section>
 
       {pendingInvites.length > 0 ? (
-        <section className="mt-8">
-          <h2 className="text-lg font-semibold">Invites</h2>
-          <ul className="mt-3 space-y-2">
+        <section className="mt-6">
+          <h2 className="text-base font-semibold">Invites</h2>
+          <ul className="mt-2 space-y-2">
             {pendingInvites.map((event) =>
               event ? (
                 <li key={event.id}>
                   <Link
                     href={`/events/${event.id}`}
-                    className="flex items-center justify-between rounded-2xl border border-accent/30 bg-accent/10 px-4 py-3"
+                    className="flex min-h-12 items-center justify-between rounded-2xl border border-accent/30 bg-accent/10 px-4 py-3"
                   >
                     <span className="font-medium">{event.title}</span>
                     <span className="text-xs uppercase tracking-wider text-accent">
@@ -222,26 +170,28 @@ export default async function AppPage() {
         </section>
       ) : null}
 
-      <section className="mt-10 grid gap-6 sm:grid-cols-2">
+      <section className="mt-6 space-y-5">
         <div>
-          <h2 className="text-lg font-semibold">They owe you</h2>
-          <p className="mt-1 font-display text-3xl text-accent">
-            ${totalDue.toFixed(0)}
-          </p>
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="text-base font-semibold">They owe you</h2>
+            <p className="font-display text-2xl text-accent">
+              ${totalDue.toFixed(0)}
+            </p>
+          </div>
           {dueByPerson.size === 0 ? (
-            <p className="mt-3 text-sm text-muted">Nobody yet.</p>
+            <p className="mt-2 text-sm text-muted">Nobody yet.</p>
           ) : (
-            <ul className="mt-3 space-y-2">
+            <ul className="mt-2 space-y-2">
               {[...dueByPerson.entries()].map(([id, amount]) => {
                 const person = personById.get(id);
                 const initial = (person?.display_name ?? "?").charAt(0);
                 return (
                   <li
                     key={id}
-                    className="flex items-center justify-between gap-3 text-sm"
+                    className="flex min-h-11 items-center justify-between gap-3 text-sm"
                   >
                     <span className="flex min-w-0 items-center gap-2">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/15 text-xs font-bold text-accent">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/15 text-xs font-bold text-accent">
                         {initial}
                       </span>
                       <span className="truncate">
@@ -259,14 +209,16 @@ export default async function AppPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold">You owe</h2>
-          <p className="mt-1 font-display text-3xl text-danger">
-            ${totalOwed.toFixed(0)}
-          </p>
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="text-base font-semibold">You owe</h2>
+            <p className="font-display text-2xl text-danger">
+              ${totalOwed.toFixed(0)}
+            </p>
+          </div>
           {owedByPerson.size === 0 ? (
-            <p className="mt-3 text-sm text-muted">All clear.</p>
+            <p className="mt-2 text-sm text-muted">All clear.</p>
           ) : (
-            <ul className="mt-3 space-y-3">
+            <ul className="mt-2 space-y-3">
               {[...owedByPerson.entries()].map(([id, amount]) => {
                 const person = personById.get(id);
                 const initial = (person?.display_name ?? "?").charAt(0);
@@ -279,9 +231,9 @@ export default async function AppPage() {
                   : null;
                 return (
                   <li key={id} className="text-sm">
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-h-11 items-center justify-between gap-3">
                       <span className="flex min-w-0 items-center gap-2">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-fg/10 text-xs font-bold">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fg/10 text-xs font-bold">
                           {initial}
                         </span>
                         <span className="truncate">
@@ -295,7 +247,7 @@ export default async function AppPage() {
                         href={payHref}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="mt-2 inline-flex text-xs font-semibold text-accent hover:underline"
+                        className="mt-1 inline-flex min-h-10 items-center text-xs font-semibold text-accent"
                       >
                         Pay on Venmo →
                       </a>
@@ -305,40 +257,12 @@ export default async function AppPage() {
               })}
             </ul>
           )}
-          <Link
-            href="/wallet"
-            className="mt-3 inline-block text-xs font-semibold text-muted hover:text-accent"
-          >
-            Open wallet →
-          </Link>
         </div>
       </section>
 
       <div className="animate-rise-delay-2">
         <TheBook events={events} />
       </div>
-
-      {catalogId ? (
-        <QuickBetForm catalogId={catalogId} opponents={opponents} />
-      ) : (
-        <section className="mt-12">
-          <h2 className="text-xl font-semibold">Make the bet</h2>
-          <p className="mt-2 text-sm text-muted">
-            Catalog isn’t ready yet. Use the{" "}
-            <Link href="/create" className="text-accent hover:underline">
-              full create flow
-            </Link>
-            .
-          </p>
-        </section>
-      )}
-
-      <p className="mt-10 text-center text-xs text-muted">
-        Need leagues or tournaments?{" "}
-        <Link href="/create" className="text-accent hover:underline">
-          Full create
-        </Link>
-      </p>
     </AppShell>
   );
 }

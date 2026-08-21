@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { AppShell } from "@/components/app-shell";
 import { createClient } from "@/lib/supabase/server";
 import {
   buildPlayerDashboard,
@@ -114,25 +115,16 @@ export default async function PlayerPage({ params }: Props) {
       : "—";
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-8 pb-20 sm:px-6 sm:py-10">
-      <div className="flex items-center justify-between gap-4">
-        <Link href="/app" className="font-display text-2xl text-fg">
-          THE LEAGUE
-        </Link>
-        <Link href="/app" className="shrink-0 text-sm text-muted hover:text-fg">
-          Dashboard
-        </Link>
-      </div>
-
-      <header className="mt-10 animate-rise">
+    <AppShell userId={user.id}>
+      <header className="animate-rise">
         <p className="text-xs uppercase tracking-wider text-muted">
-          {isSelf ? "Your player card" : "Player"}
+          {isSelf ? "Your stats" : "Player"}
         </p>
-        <h1 className="mt-2 font-display break-words text-5xl text-fg sm:text-6xl">
+        <h1 className="mt-2 font-display break-words text-4xl text-fg">
           {profile.display_name}
         </h1>
-        <p className="mt-3 text-sm text-muted">
-          Games, bets, and money story
+        <p className="mt-2 text-sm text-muted">
+          Games, bets, and money
           {profile.venmo_username ? ` · @${profile.venmo_username}` : ""}
         </p>
       </header>
@@ -273,7 +265,7 @@ export default async function PlayerPage({ params }: Props) {
           </ul>
         )}
       </section>
-    </main>
+    </AppShell>
   );
 }
 
