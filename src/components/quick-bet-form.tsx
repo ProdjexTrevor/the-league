@@ -24,6 +24,10 @@ const PRESETS = [
   { label: "Random dare", title: "Random dare" },
 ];
 
+function nameOf(roster: Opponent[], id: string) {
+  return roster.find((p) => p.id === id)?.display_name ?? "Player";
+}
+
 export function QuickBetForm({
   catalogId,
   opponents,
@@ -48,28 +52,46 @@ export function QuickBetForm({
   const [teamBPlayers, setTeamBPlayers] = useState<string[]>(
     defaultAgainstId ? [defaultAgainstId] : []
   );
+  const [addA, setAddA] = useState("");
+  const [addB, setAddB] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const roster = useMemo(() => {
-    // Include current user for team picks
     const map = new Map<string, Opponent>();
     map.set(currentUserId, { id: currentUserId, display_name: "You" });
     for (const o of opponents) map.set(o.id, o);
-    return Array.from(map.values());
+    return Array.from(map.values()).sort((a, b) =>
+      (a.display_name ?? "").localeCompare(b.display_name ?? "")
+    );
   }, [opponents, currentUserId]);
 
-  function toggleTeam(side: "a" | "b", id: string) {
+  const assigned = useMemo(
+    () => new Set([...teamAPlayers, ...teamBPlayers]),
+    [teamAPlayers, teamBPlayers]
+  );
+
+  const availableForA = roster.filter((p) => !assigned.has(p.id));
+  const availableForB = roster.filter((p) => !assigned.has(p.id));
+
+  function addToTeam(side: "a" | "b", id: string) {
+    if (!id) return;
     if (side === "a") {
-      setTeamAPlayers((prev) =>
-        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-      );
+      setTeamAPlayers((prev) => (prev.includes(id) ? prev : [...prev, id]));
       setTeamBPlayers((prev) => prev.filter((x) => x !== id));
+      setAddA("");
     } else {
-      setTeamBPlayers((prev) =>
-        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-      );
+      setTeamBPlayers((prev) => (prev.includes(id) ? prev : [...prev, id]));
       setTeamAPlayers((prev) => prev.filter((x) => x !== id));
+      setAddB("");
+    }
+  }
+
+  function removeFromTeam(side: "a" | "b", id: string) {
+    if (side === "a") {
+      setTeamAPlayers((prev) => prev.filter((x) => x !== id));
+    } else {
+      setTeamBPlayers((prev) => prev.filter((x) => x !== id));
     }
   }
 
@@ -107,7 +129,8 @@ export function QuickBetForm({
         <>
           <h2 className="text-xl font-semibold tracking-tight">Make the bet</h2>
           <p className="mt-1 text-sm text-muted">
-            They accept, then you both confirm who won before money hits the wallet.
+            They accept, then you both confirm who won before money hits the
+            wallet.
           </p>
         </>
       ) : null}
@@ -267,35 +290,114 @@ export function QuickBetForm({
               </label>
             </div>
 
-            <div>
-              <p className="text-sm text-muted">Team A players</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {roster.map((p) => (
-                  <button
-                    key={`a-${p.id}`}
-                    type="button"
-                    onClick={() => toggleTeam("a", p.id)}
-                    className={chip(teamAPlayers.includes(p.id))}
-                  >
-                    {p.display_name ?? "Player"}
-                  </button>
-                ))}
+            <p className="text-xs text-muted">
+              Add as many players as you want to each team. Someone can only be
+              on one team.
+            </p>
+
+            {/* Team A */}
+            <div className="rounded-xl border border-line p-3">
+              <p className="text-sm font-medium">Team A players</p>
+              <ul className="mt-2 space-y-1.5">
+                {teamAPlayers.length === 0 ? (
+                  <li className="text-sm text-muted">No one yet — add below.</li>
+                ) : (
+                  teamAPlayers.map((id) => (
+                    <li
+                      key={id}
+                      className="flex items-center justify-between gap-2 text-sm"
+                    >
+                      <span>{nameOf(roster, id)}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeFromTeam("a", id)}
+                        className="text-xs text-muted hover:text-danger"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+              <div className="mt-3 flex gap-2">
+                <select
+                  value={addA}
+                  onChange={(e) => setAddA(e.target.value)}
+                  className={`${field} mt-0 flex-1`}
+                  disabled={availableForA.length === 0}
+                >
+                  <option value="">
+                    {availableForA.length === 0
+                      ? "Everyone is assigned"
+                      : "Add player…"}
+                  </option>
+                  {availableForA.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.display_name ?? "Player"}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!addA}
+                  onClick={() => addToTeam("a", addA)}
+                  className="shrink-0 rounded-xl border border-line px-3 text-sm font-medium hover:border-accent hover:text-accent disabled:opacity-40"
+                >
+                  Add
+                </button>
               </div>
             </div>
 
-            <div>
-              <p className="text-sm text-muted">Team B players</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {roster.map((p) => (
-                  <button
-                    key={`b-${p.id}`}
-                    type="button"
-                    onClick={() => toggleTeam("b", p.id)}
-                    className={chip(teamBPlayers.includes(p.id))}
-                  >
-                    {p.display_name ?? "Player"}
-                  </button>
-                ))}
+            {/* Team B */}
+            <div className="rounded-xl border border-line p-3">
+              <p className="text-sm font-medium">Team B players</p>
+              <ul className="mt-2 space-y-1.5">
+                {teamBPlayers.length === 0 ? (
+                  <li className="text-sm text-muted">No one yet — add below.</li>
+                ) : (
+                  teamBPlayers.map((id) => (
+                    <li
+                      key={id}
+                      className="flex items-center justify-between gap-2 text-sm"
+                    >
+                      <span>{nameOf(roster, id)}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeFromTeam("b", id)}
+                        className="text-xs text-muted hover:text-danger"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+              <div className="mt-3 flex gap-2">
+                <select
+                  value={addB}
+                  onChange={(e) => setAddB(e.target.value)}
+                  className={`${field} mt-0 flex-1`}
+                  disabled={availableForB.length === 0}
+                >
+                  <option value="">
+                    {availableForB.length === 0
+                      ? "Everyone is assigned"
+                      : "Add player…"}
+                  </option>
+                  {availableForB.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.display_name ?? "Player"}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!addB}
+                  onClick={() => addToTeam("b", addB)}
+                  className="shrink-0 rounded-xl border border-line px-3 text-sm font-medium hover:border-accent hover:text-accent disabled:opacity-40"
+                >
+                  Add
+                </button>
               </div>
             </div>
 
@@ -365,7 +467,12 @@ export function QuickBetForm({
 
         <button
           type="submit"
-          disabled={pending || opponents.length === 0}
+          disabled={
+            pending ||
+            opponents.length === 0 ||
+            (matchup === "team" &&
+              (teamAPlayers.length < 1 || teamBPlayers.length < 1))
+          }
           className="w-full rounded-xl bg-accent py-3.5 text-sm font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-50"
         >
           {pending ? "Sending invite…" : "Lock it in"}

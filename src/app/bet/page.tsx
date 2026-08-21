@@ -19,17 +19,19 @@ export default async function BetPage({ searchParams }: Props) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/bet");
 
-  const [{ data: memberships }, { data: propCatalog }] = await Promise.all([
-    supabase
-      .from("league_members")
-      .select("leagues(id)")
-      .eq("user_id", user.id),
-    supabase
-      .from("game_catalog")
-      .select("id")
-      .eq("slug", "proposition")
-      .maybeSingle(),
-  ]);
+  const [{ data: memberships }, { data: propCatalog }, { data: allProfiles }] =
+    await Promise.all([
+      supabase
+        .from("league_members")
+        .select("leagues(id)")
+        .eq("user_id", user.id),
+      supabase
+        .from("game_catalog")
+        .select("id")
+        .eq("slug", "proposition")
+        .maybeSingle(),
+      supabase.from("profiles").select("id, display_name").order("display_name"),
+    ]);
 
   const leagueIds =
     memberships
@@ -55,6 +57,13 @@ export default async function BetPage({ searchParams }: Props) {
     if (row.user_id === user.id) continue;
     const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
     if (p?.id) opponentMap.set(p.id, p);
+  }
+  // Also allow any signed-up player (useful for team fills outside your leagues)
+  for (const p of allProfiles ?? []) {
+    if (p.id === user.id) continue;
+    if (!opponentMap.has(p.id)) {
+      opponentMap.set(p.id, { id: p.id, display_name: p.display_name });
+    }
   }
   const opponents = Array.from(opponentMap.values()).sort((a, b) =>
     (a.display_name ?? "").localeCompare(b.display_name ?? "")
