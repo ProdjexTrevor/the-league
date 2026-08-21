@@ -184,6 +184,42 @@ export async function createCustomGame(formData: FormData) {
   redirect("/catalog");
 }
 
+/** SideAction-style one-screen bet: you + one opponent, custom stake. */
+export async function quickBet(formData: FormData) {
+  const title = String(formData.get("title") ?? "").trim();
+  const againstId = String(formData.get("against_id") ?? "").trim();
+  const stake = Number(formData.get("stake") ?? 0);
+  const line = String(formData.get("line") ?? "").trim();
+  const terms = String(formData.get("terms") ?? "").trim();
+  const catalogId = String(formData.get("catalog_id") ?? "").trim();
+
+  if (!title) fail("What’s the bet?");
+  if (!againstId) fail("Pick who you’re betting against.");
+  if (!(stake > 0)) fail("Enter a stake.");
+  if (!catalogId) fail("Missing game catalog.");
+
+  const notes = [line ? `Line: ${line}` : null, terms || null]
+    .filter(Boolean)
+    .join("\n");
+
+  const fd = new FormData();
+  fd.set("kind", "bet");
+  fd.set("title", title);
+  fd.set("catalog_id", catalogId);
+  fd.set("wager_mode", "custom");
+  fd.set("wager_scope", "player");
+  fd.set("stake", String(stake));
+  fd.set("entry_fee", "0");
+  fd.set("notes", notes || title);
+  fd.append("player_id", againstId);
+
+  const { user } = await ensureProfile();
+  fd.append("player_id", user.id);
+  fd.set(`wager_player_${user.id}`, String(stake));
+
+  await createEvent(fd);
+}
+
 export async function createEvent(formData: FormData) {
   const kind = String(formData.get("kind") ?? "game");
   const title = String(formData.get("title") ?? "").trim();

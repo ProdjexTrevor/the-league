@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 
+import { Brand } from "@/components/brand";
 import { createClient } from "@/lib/supabase/client";
+
+const field =
+  "mt-1.5 w-full rounded-xl border border-line bg-bg-elevated px-3.5 py-3 text-fg outline-none focus:border-accent";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -34,58 +38,54 @@ export default function LoginForm() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-4 py-12 sm:px-6 sm:py-16">
-      <div className="w-full max-w-md">
-        <Link href="/" className="font-display text-3xl text-fg">
-          THE LEAGUE
+    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-4 py-12">
+      <Brand href="/" size="sm" />
+      <h1 className="mt-10 text-2xl font-semibold tracking-tight">Log in</h1>
+      <p className="mt-2 text-sm text-muted">Pick up the book where you left off.</p>
+
+      <form onSubmit={onSubmit} className="mt-8 space-y-4">
+        <label className="block text-sm">
+          <span className="text-muted">Email</span>
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={field}
+          />
+        </label>
+        <label className="block text-sm">
+          <span className="text-muted">Password</span>
+          <input
+            type="password"
+            required
+            minLength={6}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={field}
+          />
+        </label>
+        {error && <p className="text-sm text-danger">{error}</p>}
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full rounded-xl bg-accent py-3.5 text-sm font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-60"
+        >
+          {loading ? "Signing in…" : "Log in"}
+        </button>
+      </form>
+
+      <p className="mt-6 text-sm text-muted">
+        <Link href="/forgot-password" className="text-accent hover:underline">
+          Forgot password?
         </Link>
-        <h1 className="mt-10 text-2xl font-semibold tracking-tight">Log in</h1>
-        <p className="mt-2 text-sm text-muted">Pick up where your standings left off.</p>
-
-        <form onSubmit={onSubmit} className="mt-8 space-y-4">
-          <label className="block text-sm">
-            <span className="text-muted">Email</span>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1.5 w-full rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-fg outline-none focus:border-accent"
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="text-muted">Password</span>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1.5 w-full rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-fg outline-none focus:border-accent"
-            />
-          </label>
-          {error && <p className="text-sm text-danger">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-sm bg-accent py-3 text-sm font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-60"
-          >
-            {loading ? "Signing in…" : "Log in"}
-          </button>
-        </form>
-
-        <p className="mt-6 text-sm text-muted">
-          <Link href="/forgot-password" className="text-accent hover:underline">
-            Forgot password?
-          </Link>
-        </p>
-        <p className="mt-3 text-sm text-muted">
-          New here?{" "}
-          <Link href="/signup" className="text-accent hover:underline">
-            Create an account
-          </Link>
-        </p>
-      </div>
+      </p>
+      <p className="mt-3 text-sm text-muted">
+        New here?{" "}
+        <Link href="/signup" className="text-accent hover:underline">
+          Create an account
+        </Link>
+      </p>
     </main>
   );
 }

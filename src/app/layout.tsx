@@ -18,7 +18,7 @@ const sans = DM_Sans({
 
 export const metadata: Metadata = {
   title: "The League",
-  description: "Friendly wagers. Real standings. Your crew.",
+  description: "Set the bet, set the line, shake on it. Friendly wagers with receipts.",
 };
 
 export const viewport: Viewport = {

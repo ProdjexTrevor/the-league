@@ -4,8 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
+import { Brand } from "@/components/brand";
 import { createClient } from "@/lib/supabase/client";
 import { normalizeVenmoUsername } from "@/lib/venmo";
+
+const field =
+  "mt-1.5 w-full rounded-xl border border-line bg-bg-elevated px-3.5 py-3 text-fg outline-none focus:border-accent";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -67,87 +71,83 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-4 py-12 sm:px-6 sm:py-16">
-      <div className="w-full max-w-md">
-        <Link href="/" className="font-display text-3xl text-fg">
-          THE LEAGUE
-        </Link>
-        <h1 className="mt-10 text-2xl font-semibold tracking-tight">
-          Create account
-        </h1>
-        <p className="mt-2 text-sm text-muted">
-          Add your Venmo so payouts open with one tap.
-        </p>
+    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-4 py-12">
+      <Brand href="/" size="sm" />
+      <h1 className="mt-10 text-2xl font-semibold tracking-tight">
+        Create account
+      </h1>
+      <p className="mt-2 text-sm text-muted">
+        Add your Venmo so payouts open with one tap.
+      </p>
 
-        <form onSubmit={onSubmit} className="mt-8 space-y-4">
-          <label className="block text-sm">
-            <span className="text-muted">Display name</span>
+      <form onSubmit={onSubmit} className="mt-8 space-y-4">
+        <label className="block text-sm">
+          <span className="text-muted">Display name</span>
+          <input
+            type="text"
+            required
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            className={field}
+          />
+        </label>
+        <label className="block text-sm">
+          <span className="text-muted">Venmo username</span>
+          <div className="relative mt-1.5">
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
+              @
+            </span>
             <input
               type="text"
               required
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              className="mt-1.5 w-full rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-fg outline-none focus:border-accent"
+              value={venmoUsername}
+              onChange={(e) => setVenmoUsername(e.target.value)}
+              placeholder="your-venmo"
+              className="w-full rounded-xl border border-line bg-bg-elevated py-3 pl-8 pr-3.5 text-fg outline-none focus:border-accent"
             />
-          </label>
-          <label className="block text-sm">
-            <span className="text-muted">Venmo username</span>
-            <div className="relative mt-1.5">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">
-                @
-              </span>
-              <input
-                type="text"
-                required
-                value={venmoUsername}
-                onChange={(e) => setVenmoUsername(e.target.value)}
-                placeholder="your-venmo"
-                className="w-full rounded-sm border border-line bg-bg-elevated py-2.5 pl-7 pr-3 text-fg outline-none focus:border-accent"
-              />
-            </div>
-            <span className="mt-1 block text-xs text-muted">
-              Used when others pay you from their wallet.
-            </span>
-          </label>
-          <label className="block text-sm">
-            <span className="text-muted">Email</span>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1.5 w-full rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-fg outline-none focus:border-accent"
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="text-muted">Password</span>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1.5 w-full rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-fg outline-none focus:border-accent"
-            />
-          </label>
-          {error && <p className="text-sm text-danger">{error}</p>}
-          {message && <p className="text-sm text-accent">{message}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-sm bg-accent py-3 text-sm font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-60"
-          >
-            {loading ? "Creating…" : "Sign up"}
-          </button>
-        </form>
+          </div>
+          <span className="mt-1 block text-xs text-muted">
+            Used when others pay you from their wallet.
+          </span>
+        </label>
+        <label className="block text-sm">
+          <span className="text-muted">Email</span>
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={field}
+          />
+        </label>
+        <label className="block text-sm">
+          <span className="text-muted">Password</span>
+          <input
+            type="password"
+            required
+            minLength={6}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={field}
+          />
+        </label>
+        {error && <p className="text-sm text-danger">{error}</p>}
+        {message && <p className="text-sm text-accent">{message}</p>}
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full rounded-xl bg-accent py-3.5 text-sm font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-60"
+        >
+          {loading ? "Creating…" : "Sign up"}
+        </button>
+      </form>
 
-        <p className="mt-6 text-sm text-muted">
-          Already have an account?{" "}
-          <Link href="/login" className="text-accent hover:underline">
-            Log in
-          </Link>
-        </p>
-      </div>
+      <p className="mt-6 text-sm text-muted">
+        Already have an account?{" "}
+        <Link href="/login" className="text-accent hover:underline">
+          Log in
+        </Link>
+      </p>
     </main>
   );
 }
