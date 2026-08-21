@@ -313,6 +313,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      bet_result_claims: {
+        Row: {
+          id: string;
+          event_id: string;
+          user_id: string;
+          winner_key: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          user_id: string;
+          winner_key: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          event_id?: string;
+          user_id?: string;
+          winner_key?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       league_standings: {

@@ -184,40 +184,196 @@ export async function createCustomGame(formData: FormData) {
   redirect("/catalog");
 }
 
-/** SideAction-style one-screen bet: you + one opponent, custom stake. */
+/** Phone bet: straight-up or odds; person vs person or team vs team. */
 export async function quickBet(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
-  const againstId = String(formData.get("against_id") ?? "").trim();
-  const stake = Number(formData.get("stake") ?? 0);
+  const catalogId = String(formData.get("catalog_id") ?? "").trim();
+  const wagerType = String(formData.get("wager_type") ?? "straight"); // straight | odds
+  const matchup = String(formData.get("matchup") ?? "person"); // person | team
   const line = String(formData.get("line") ?? "").trim();
   const terms = String(formData.get("terms") ?? "").trim();
-  const catalogId = String(formData.get("catalog_id") ?? "").trim();
 
   if (!title) fail("What’s the bet?");
-  if (!againstId) fail("Pick who you’re betting against.");
-  if (!(stake > 0)) fail("Enter a stake.");
   if (!catalogId) fail("Missing game catalog.");
 
-  const notes = [line ? `Line: ${line}` : null, terms || null]
-    .filter(Boolean)
-    .join("\n");
-
+  const { user } = await ensureProfile();
   const fd = new FormData();
   fd.set("kind", "bet");
   fd.set("title", title);
   fd.set("catalog_id", catalogId);
   fd.set("wager_mode", "custom");
-  fd.set("wager_scope", "player");
-  fd.set("stake", String(stake));
   fd.set("entry_fee", "0");
-  fd.set("notes", notes || title);
-  fd.append("player_id", againstId);
 
-  const { user } = await ensureProfile();
-  fd.append("player_id", user.id);
-  fd.set(`wager_player_${user.id}`, String(stake));
+  const notes = [
+    wagerType === "odds" ? "Odds bet (different stakes)" : "Straight up",
+    matchup === "team" ? "Team vs team" : "Person vs person",
+    line ? `Line: ${line}` : null,
+    terms || null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  fd.set("notes", notes || title);
+
+  if (matchup === "person") {
+    const againstId = String(formData.get("against_id") ?? "").trim();
+    const myStake = Number(formData.get("my_stake") ?? 0);
+    const theirStakeRaw = Number(formData.get("their_stake") ?? 0);
+    const theirStake = wagerType === "straight" ? myStake : theirStakeRaw;
+
+    if (!againstId) fail("Pick who you’re betting against.");
+    if (!(myStake > 0)) fail("Enter your stake.");
+    if (!(theirStake > 0)) fail("Enter their stake.");
+    if (againstId === user.id) fail("Pick someone else.");
+
+    fd.set("wager_scope", "player");
+    fd.set("stake", String(myStake));
+    fd.append("player_id", againstId);
+    fd.append("player_id", user.id);
+    fd.set(`wager_player_${user.id}`, String(myStake));
+    fd.set(`wager_player_${againstId}`, String(theirStake));
+  } else {
+    const teamA = String(formData.get("team_a_name") ?? "Team A").trim() || "Team A";
+    const teamB = String(formData.get("team_b_name") ?? "Team B").trim() || "Team B";
+    const stakeA = Number(formData.get("stake_a") ?? 0);
+    const stakeBRaw = Number(formData.get("stake_b") ?? 0);
+    const stakeB = wagerType === "straight" ? stakeA : stakeBRaw;
+    const teamAPlayers = formData
+      .getAll("team_a_player")
+      .map((v) => String(v))
+      .filter(Boolean);
+    const teamBPlayers = formData
+      .getAll("team_b_player")
+      .map((v) => String(v))
+      .filter(Boolean);
+
+    if (!teamAPlayers.includes(user.id) && !teamBPlayers.includes(user.id)) {
+      // put creator on team A if they forgot
+      teamAPlayers.push(user.id);
+    }
+    if (teamAPlayers.length < 1 || teamBPlayers.length < 1) {
+      fail("Each team needs at least one player.");
+    }
+    const overlap = teamAPlayers.filter((id) => teamBPlayers.includes(id));
+    if (overlap.length > 0) fail("A player can’t be on both teams.");
+    if (!(stakeA > 0)) fail("Enter Team A’s stake.");
+    if (!(stakeB > 0)) fail("Enter Team B’s stake.");
+
+    fd.set("wager_scope", "team");
+    fd.set("team_1_name", teamA);
+    fd.set("team_2_name", teamB);
+    fd.set("wager_team_1", String(stakeA));
+    fd.set("wager_team_2", String(stakeB));
+    fd.set("stake", String(Math.max(stakeA, stakeB)));
+
+    for (const id of [...new Set([...teamAPlayers, ...teamBPlayers])]) {
+      fd.append("player_id", id);
+      if (teamAPlayers.includes(id)) fd.set(`player_team_${id}`, "1");
+      if (teamBPlayers.includes(id)) fd.set(`player_team_${id}`, "2");
+    }
+  }
 
   await createEvent(fd);
+}
+
+/**
+ * Each accepted player claims who won. When everyone agrees, settle + wallet IOUs.
+ */
+export async function claimBetResult(eventId: string, formData: FormData) {
+  const winnerKey = String(formData.get("winner_key") ?? "").trim();
+  if (!winnerKey) fail("Pick who won.");
+
+  const { supabase, user } = await ensureProfile();
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, league_id, kind, wager_mode, status, catalog_id, default_stake_units, entry_fee_units")
+    .eq("id", eventId)
+    .single();
+  if (!event) fail("Event not found.");
+  if (event.kind !== "bet") fail("Result claims are for bets.");
+  if (event.status === "completed") fail("Already settled.");
+
+  const { data: allPlayers } = await supabase
+    .from("event_players")
+    .select("user_id, side_label, invite_status")
+    .eq("event_id", eventId);
+
+  const me = (allPlayers ?? []).find((p) => p.user_id === user.id);
+  if (!me || (me.invite_status ?? "accepted") !== "accepted") {
+    fail("Accept the invite before claiming a result.");
+  }
+
+  const pending = (allPlayers ?? []).filter((p) => p.invite_status === "pending");
+  if (pending.length > 0) {
+    fail("Everyone must accept the invite before settling.");
+  }
+
+  const accepted = (allPlayers ?? []).filter(
+    (p) => (p.invite_status ?? "accepted") === "accepted"
+  );
+
+  // Validate winner_key
+  if (winnerKey.startsWith("user:")) {
+    const wid = winnerKey.slice(5);
+    if (!accepted.some((p) => p.user_id === wid)) fail("Invalid winner.");
+  } else if (winnerKey.startsWith("side:")) {
+    const side = winnerKey.slice(5);
+    if (!accepted.some((p) => p.side_label === side)) fail("Invalid winning team.");
+  } else {
+    fail("Invalid winner.");
+  }
+
+  const { error: upsertError } = await supabase.from("bet_result_claims").upsert(
+    {
+      event_id: eventId,
+      user_id: user.id,
+      winner_key: winnerKey,
+    },
+    { onConflict: "event_id,user_id" }
+  );
+  if (upsertError) fail(upsertError.message);
+
+  const { data: claims } = await supabase
+    .from("bet_result_claims")
+    .select("user_id, winner_key")
+    .eq("event_id", eventId);
+
+  const claimByUser = new Map((claims ?? []).map((c) => [c.user_id, c.winner_key]));
+  const everyoneClaimed = accepted.every((p) => claimByUser.has(p.user_id));
+  const keys = accepted.map((p) => claimByUser.get(p.user_id));
+  const allAgree =
+    everyoneClaimed && keys.every((k) => k && k === keys[0]);
+
+  revalidatePath(`/events/${eventId}`);
+  revalidatePath("/app");
+
+  if (!allAgree) {
+    return;
+  }
+
+  // Build settle form outcomes and finalize
+  const agreed = keys[0] as string;
+  const settleFd = new FormData();
+
+  if (agreed.startsWith("user:")) {
+    const winnerId = agreed.slice(5);
+    for (const p of accepted) {
+      settleFd.set(
+        `outcome_${p.user_id}`,
+        p.user_id === winnerId ? "win" : "loss"
+      );
+    }
+  } else {
+    const side = agreed.slice(5);
+    for (const p of accepted) {
+      settleFd.set(
+        `outcome_${p.user_id}`,
+        p.side_label === side ? "win" : "loss"
+      );
+    }
+  }
+
+  await settleEvent(eventId, settleFd);
 }
 
 export async function createEvent(formData: FormData) {
@@ -350,19 +506,37 @@ export async function createEvent(formData: FormData) {
         }
       }
     } else if (kind === "bet") {
-      const amount = Number(formData.get(`wager_player_${user.id}`) ?? 0);
-      if (!(amount > 0)) {
-        fail("Enter how much money you are wagering.");
+      // Prefer explicit stakes for every player when provided (straight/odds quick bet).
+      let linesCreatedForBet = 0;
+      for (const playerId of playerIds) {
+        const amount = Number(formData.get(`wager_player_${playerId}`) ?? 0);
+        if (!(amount > 0)) continue;
+        const { error: lineError } = await supabase.from("wager_lines").insert({
+          event_id: data.id,
+          player_id: playerId,
+          odds_num: 1,
+          odds_den: 1,
+          stake_units: amount,
+        });
+        if (lineError) fail(lineError.message);
+        linesCreatedForBet += 1;
       }
-      const { error: lineError } = await supabase.from("wager_lines").insert({
-        event_id: data.id,
-        player_id: user.id,
-        odds_num: 1,
-        odds_den: 1,
-        stake_units: amount,
-      });
-      if (lineError) fail(lineError.message);
-      linesCreated += 1;
+      if (linesCreatedForBet === 0) {
+        const amount = Number(formData.get(`wager_player_${user.id}`) ?? 0);
+        if (!(amount > 0)) {
+          fail("Enter how much money you are wagering.");
+        }
+        const { error: lineError } = await supabase.from("wager_lines").insert({
+          event_id: data.id,
+          player_id: user.id,
+          odds_num: 1,
+          odds_den: 1,
+          stake_units: amount,
+        });
+        if (lineError) fail(lineError.message);
+        linesCreatedForBet = 1;
+      }
+      linesCreated = linesCreatedForBet;
     } else {
       for (const playerId of playerIds) {
         const amount = Number(formData.get(`wager_player_${playerId}`) ?? 0);
@@ -448,7 +622,7 @@ export async function acceptEventInvite(eventId: string, formData: FormData) {
     fail("Enter how much money you are wagering.");
   }
 
-  const { supabase } = await ensureProfile();
+  const { supabase, user } = await ensureProfile();
   const { data: event } = await supabase
     .from("events")
     .select("id, league_id, kind, wager_mode")
@@ -461,7 +635,31 @@ export async function acceptEventInvite(eventId: string, formData: FormData) {
     event.wager_mode === "custom" &&
     (wagerUnits == null || !(wagerUnits > 0))
   ) {
-    fail("Enter how much money you are wagering to accept this bet.");
+    const { data: existingLine } = await supabase
+      .from("wager_lines")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("player_id", user.id)
+      .limit(1);
+    const { data: myPlayer } = await supabase
+      .from("event_players")
+      .select("side_label")
+      .eq("event_id", eventId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    let teamCovered = false;
+    if (myPlayer?.side_label) {
+      const { data: sideLine } = await supabase
+        .from("wager_lines")
+        .select("id")
+        .eq("event_id", eventId)
+        .eq("side_label", myPlayer.side_label)
+        .limit(1);
+      teamCovered = (sideLine?.length ?? 0) > 0;
+    }
+    if (!(existingLine?.length || teamCovered)) {
+      fail("Enter how much money you are wagering to accept this bet.");
+    }
   }
 
   const { error } = await supabase.rpc("accept_event_invite", {

@@ -74,6 +74,7 @@ export default async function BetPage({ searchParams }: Props) {
           opponents={opponents}
           showHeading={false}
           defaultAgainstId={against ?? ""}
+          currentUserId={user.id}
         />
       ) : (
         <p className="text-sm text-muted">

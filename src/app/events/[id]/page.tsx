@@ -9,6 +9,7 @@ import {
   setWagerLine,
   settleEvent,
 } from "@/app/actions";
+import { BetClaimPanel } from "@/components/bet-claim-panel";
 import { createClient } from "@/lib/supabase/server";
 import {
   eventKindLabel,
@@ -47,6 +48,7 @@ export default async function EventPage({ params }: Props) {
     { data: lines },
     { data: members },
     { data: profiles },
+    { data: claims },
   ] = await Promise.all([
     supabase
       .from("game_catalog")
@@ -67,6 +69,10 @@ export default async function EventPage({ params }: Props) {
           .eq("league_id", event.league_id)
       : Promise.resolve({ data: null }),
     supabase.from("profiles").select("id, display_name").order("display_name"),
+    supabase
+      .from("bet_result_claims")
+      .select("user_id, winner_key")
+      .eq("event_id", id),
   ]);
 
   const scoringMode = (catalog?.scoring_mode ?? "placement") as ScoringMode;
@@ -105,8 +111,39 @@ export default async function EventPage({ params }: Props) {
     [];
   const pendingCount =
     players?.filter((p) => p.invite_status === "pending").length ?? 0;
+  const myPlayerLine = lines?.some(
+    (l) => l.player_id === user.id && Number(l.stake_units) > 0
+  );
+  const myTeamLine =
+    myRow?.side_label &&
+    lines?.some(
+      (l) => l.side_label === myRow.side_label && Number(l.stake_units) > 0
+    );
   const needsMyWagerOnAccept =
-    event.kind === "bet" && event.wager_mode === "custom";
+    event.kind === "bet" &&
+    event.wager_mode === "custom" &&
+    !myPlayerLine &&
+    !myTeamLine;
+
+  const isTeamBet = acceptedPlayers.some((p) => !!p.side_label);
+  const claimOptions = isTeamBet
+    ? [
+        ...new Set(
+          acceptedPlayers.map((p) => p.side_label).filter(Boolean) as string[]
+        ),
+      ].map((side) => ({ key: `side:${side}`, label: side }))
+    : acceptedPlayers.map((p) => ({
+        key: `user:${p.user_id}`,
+        label: nameById.get(p.user_id) ?? "Player",
+      }));
+
+  const claimRows = (claims ?? []).map((c) => ({
+    user_id: c.user_id,
+    winner_key: c.winner_key,
+    name: nameById.get(c.user_id) ?? "Player",
+  }));
+  const myClaim =
+    claims?.find((c) => c.user_id === user.id)?.winner_key ?? null;
 
   async function addPlayerAction(formData: FormData) {
     "use server";
@@ -193,7 +230,7 @@ export default async function EventPage({ params }: Props) {
             Accept to join this {eventKindLabel(event.kind).toLowerCase()}.
             {needsMyWagerOnAccept
               ? " Enter how much money you are putting up."
-              : ""}
+              : " Stakes are already set — just accept to lock it in."}
           </p>
           <form action={acceptAction} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
             {needsMyWagerOnAccept && (
@@ -448,6 +485,21 @@ export default async function EventPage({ params }: Props) {
       )}
 
       {event.status !== "completed" &&
+        event.kind === "bet" &&
+        acceptedPlayers.length >= 2 &&
+        pendingCount === 0 &&
+        myInviteStatus === "accepted" && (
+          <BetClaimPanel
+            eventId={id}
+            options={claimOptions}
+            myClaim={myClaim}
+            claims={claimRows}
+            acceptedCount={acceptedPlayers.length}
+          />
+        )}
+
+      {event.status !== "completed" &&
+        event.kind !== "bet" &&
         acceptedPlayers.length >= 1 &&
         myInviteStatus !== "pending" && (
           <section className="mt-10">

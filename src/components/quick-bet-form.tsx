@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import { quickBet } from "@/app/actions";
 
@@ -8,6 +8,13 @@ type Opponent = { id: string; display_name: string | null };
 
 const field =
   "mt-1.5 w-full rounded-xl border border-line bg-bg px-3.5 py-3 text-fg outline-none transition focus:border-accent";
+
+const chip = (on: boolean) =>
+  `rounded-full border px-3 py-2 text-xs font-medium transition ${
+    on
+      ? "border-accent bg-accent/15 text-accent"
+      : "border-line text-muted hover:border-fg/30 hover:text-fg"
+  }`;
 
 const PRESETS = [
   { label: "Match play", title: "Match play" },
@@ -22,18 +29,61 @@ export function QuickBetForm({
   opponents,
   showHeading = true,
   defaultAgainstId = "",
+  currentUserId,
 }: {
   catalogId: string;
   opponents: Opponent[];
   showHeading?: boolean;
   defaultAgainstId?: string;
+  currentUserId: string;
 }) {
   const [title, setTitle] = useState("");
+  const [wagerType, setWagerType] = useState<"straight" | "odds">("straight");
+  const [matchup, setMatchup] = useState<"person" | "team">("person");
+  const [myStake, setMyStake] = useState("20");
+  const [theirStake, setTheirStake] = useState("20");
+  const [stakeA, setStakeA] = useState("20");
+  const [stakeB, setStakeB] = useState("20");
+  const [teamAPlayers, setTeamAPlayers] = useState<string[]>([currentUserId]);
+  const [teamBPlayers, setTeamBPlayers] = useState<string[]>(
+    defaultAgainstId ? [defaultAgainstId] : []
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const roster = useMemo(() => {
+    // Include current user for team picks
+    const map = new Map<string, Opponent>();
+    map.set(currentUserId, { id: currentUserId, display_name: "You" });
+    for (const o of opponents) map.set(o.id, o);
+    return Array.from(map.values());
+  }, [opponents, currentUserId]);
+
+  function toggleTeam(side: "a" | "b", id: string) {
+    if (side === "a") {
+      setTeamAPlayers((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      );
+      setTeamBPlayers((prev) => prev.filter((x) => x !== id));
+    } else {
+      setTeamBPlayers((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      );
+      setTeamAPlayers((prev) => prev.filter((x) => x !== id));
+    }
+  }
+
   function onSubmit(formData: FormData) {
     setError(null);
+    formData.set("wager_type", wagerType);
+    formData.set("matchup", matchup);
+    if (wagerType === "straight") {
+      formData.set("their_stake", myStake);
+      formData.set("stake_b", stakeA);
+    }
+    for (const id of teamAPlayers) formData.append("team_a_player", id);
+    for (const id of teamBPlayers) formData.append("team_b_player", id);
+
     startTransition(async () => {
       try {
         await quickBet(formData);
@@ -57,7 +107,7 @@ export function QuickBetForm({
         <>
           <h2 className="text-xl font-semibold tracking-tight">Make the bet</h2>
           <p className="mt-1 text-sm text-muted">
-            Set the stake, set the line, shake on it.
+            They accept, then you both confirm who won before money hits the wallet.
           </p>
         </>
       ) : null}
@@ -68,11 +118,7 @@ export function QuickBetForm({
             key={p.label}
             type="button"
             onClick={() => setTitle(p.title)}
-            className={`rounded-full border px-3 py-2 text-xs font-medium transition ${
-              title === p.title
-                ? "border-accent bg-accent/15 text-accent"
-                : "border-line text-muted hover:border-fg/30 hover:text-fg"
-            }`}
+            className={chip(title === p.title)}
           >
             {p.label}
           </button>
@@ -81,6 +127,10 @@ export function QuickBetForm({
 
       <form action={onSubmit} className="mt-5 space-y-4">
         <input type="hidden" name="catalog_id" value={catalogId} />
+        <input type="hidden" name="my_stake" value={myStake} />
+        <input type="hidden" name="their_stake" value={theirStake} />
+        <input type="hidden" name="stake_a" value={stakeA} />
+        <input type="hidden" name="stake_b" value={stakeB} />
 
         <label className="block text-sm">
           <span className="text-muted">What’s the bet?</span>
@@ -94,41 +144,193 @@ export function QuickBetForm({
           />
         </label>
 
-        <label className="block text-sm">
-          <span className="text-muted">Against</span>
-          <select
-            name="against_id"
-            required
-            defaultValue={
-              defaultAgainstId &&
-              opponents.some((o) => o.id === defaultAgainstId)
-                ? defaultAgainstId
-                : ""
-            }
-            className={field}
-          >            <option value="" disabled>
-              Pick a friend
-            </option>
-            {opponents.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.display_name ?? "Player"}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div>
+          <p className="text-sm text-muted">Bet type</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={chip(wagerType === "straight")}
+              onClick={() => setWagerType("straight")}
+            >
+              Straight up
+            </button>
+            <button
+              type="button"
+              className={chip(wagerType === "odds")}
+              onClick={() => setWagerType("odds")}
+            >
+              Odds
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            {wagerType === "straight"
+              ? "Same stake on both sides."
+              : "Each side puts up its own amount."}
+          </p>
+        </div>
 
-        <label className="block text-sm">
-          <span className="text-muted">Stake ($)</span>
-          <input
-            name="stake"
-            type="number"
-            required
-            min={1}
-            step="1"
-            placeholder="20"
-            className={field}
-          />
-        </label>
+        <div>
+          <p className="text-sm text-muted">Matchup</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={chip(matchup === "person")}
+              onClick={() => setMatchup("person")}
+            >
+              Person vs person
+            </button>
+            <button
+              type="button"
+              className={chip(matchup === "team")}
+              onClick={() => setMatchup("team")}
+            >
+              Team vs team
+            </button>
+          </div>
+        </div>
+
+        {matchup === "person" ? (
+          <>
+            <label className="block text-sm">
+              <span className="text-muted">Against</span>
+              <select
+                name="against_id"
+                required
+                defaultValue={
+                  defaultAgainstId &&
+                  opponents.some((o) => o.id === defaultAgainstId)
+                    ? defaultAgainstId
+                    : ""
+                }
+                className={field}
+              >
+                <option value="" disabled>
+                  Pick a friend
+                </option>
+                {opponents.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.display_name ?? "Player"}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block text-sm">
+              <span className="text-muted">Your stake ($)</span>
+              <input
+                type="number"
+                required
+                min={1}
+                step="1"
+                value={myStake}
+                onChange={(e) => {
+                  setMyStake(e.target.value);
+                  if (wagerType === "straight") setTheirStake(e.target.value);
+                }}
+                className={field}
+              />
+            </label>
+
+            {wagerType === "odds" ? (
+              <label className="block text-sm">
+                <span className="text-muted">Their stake ($)</span>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  step="1"
+                  value={theirStake}
+                  onChange={(e) => setTheirStake(e.target.value)}
+                  className={field}
+                />
+              </label>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block text-sm">
+                <span className="text-muted">Team A name</span>
+                <input
+                  name="team_a_name"
+                  defaultValue="Team A"
+                  className={field}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-muted">Team B name</span>
+                <input
+                  name="team_b_name"
+                  defaultValue="Team B"
+                  className={field}
+                />
+              </label>
+            </div>
+
+            <div>
+              <p className="text-sm text-muted">Team A players</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {roster.map((p) => (
+                  <button
+                    key={`a-${p.id}`}
+                    type="button"
+                    onClick={() => toggleTeam("a", p.id)}
+                    className={chip(teamAPlayers.includes(p.id))}
+                  >
+                    {p.display_name ?? "Player"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm text-muted">Team B players</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {roster.map((p) => (
+                  <button
+                    key={`b-${p.id}`}
+                    type="button"
+                    onClick={() => toggleTeam("b", p.id)}
+                    className={chip(teamBPlayers.includes(p.id))}
+                  >
+                    {p.display_name ?? "Player"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <label className="block text-sm">
+              <span className="text-muted">Team A stake ($)</span>
+              <input
+                type="number"
+                required
+                min={1}
+                step="1"
+                value={stakeA}
+                onChange={(e) => {
+                  setStakeA(e.target.value);
+                  if (wagerType === "straight") setStakeB(e.target.value);
+                }}
+                className={field}
+              />
+            </label>
+
+            {wagerType === "odds" ? (
+              <label className="block text-sm">
+                <span className="text-muted">Team B stake ($)</span>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  step="1"
+                  value={stakeB}
+                  onChange={(e) => setStakeB(e.target.value)}
+                  className={field}
+                />
+              </label>
+            ) : null}
+          </>
+        )}
 
         <label className="block text-sm">
           <span className="text-muted">Line / handicap (optional)</span>
@@ -166,8 +368,12 @@ export function QuickBetForm({
           disabled={pending || opponents.length === 0}
           className="w-full rounded-xl bg-accent py-3.5 text-sm font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-50"
         >
-          {pending ? "Locking in…" : "Lock it in"}
+          {pending ? "Sending invite…" : "Lock it in"}
         </button>
+        <p className="text-center text-xs text-muted">
+          They’ll get an invite. After they accept, both of you confirm the
+          winner before anything hits the wallet.
+        </p>
       </form>
     </section>
   );
