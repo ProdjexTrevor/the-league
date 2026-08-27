@@ -218,9 +218,17 @@ async function loadEspnEvents(
   const candidates: string[] = [];
 
   if (meta.cdnKey) {
+    // Prefer undated scoreboard (week/day default) — dated queries often return empty.
     candidates.push(
       `https://cdn.espn.com/core/${meta.cdnKey}/scoreboard?xhr=1&limit=200`
     );
+  }
+
+  candidates.push(
+    `https://site.web.api.espn.com/apis/site/v2/sports/${meta.path}/scoreboard?limit=200`
+  );
+
+  if (meta.cdnKey) {
     candidates.push(
       `https://cdn.espn.com/core/${meta.cdnKey}/scoreboard?xhr=1&dates=${date}&limit=200`
     );
@@ -230,10 +238,14 @@ async function loadEspnEvents(
     `https://site.web.api.espn.com/apis/site/v2/sports/${meta.path}/scoreboard?dates=${date}&limit=200`
   );
   candidates.push(
+    `https://site.api.espn.com/apis/site/v2/sports/${meta.path}/scoreboard?limit=200`
+  );
+  candidates.push(
     `https://site.api.espn.com/apis/site/v2/sports/${meta.path}/scoreboard?dates=${date}&limit=200`
   );
 
   let lastStatus = 0;
+  let sawOkEmpty = false;
   for (const url of candidates) {
     try {
       const res = await fetch(url, {
@@ -248,11 +260,15 @@ async function loadEspnEvents(
         content?: { sbData?: { events?: EspnEvent[] } };
       };
       const events = data.content?.sbData?.events ?? data.events ?? [];
-      if (Array.isArray(events)) return events;
+      // Some ESPN hosts return 200 with an empty day slate — keep trying.
+      if (Array.isArray(events) && events.length > 0) return events;
+      sawOkEmpty = true;
     } catch {
       // try next host
     }
   }
+
+  if (sawOkEmpty) return [];
 
   throw new Error(`Could not load ${meta.label} slate (${lastStatus || "network"}).`);
 }
