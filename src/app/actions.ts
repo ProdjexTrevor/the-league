@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   draftNeedsMorePicks,
   initGolfClubDraft,
-  isGolfClubDraft,
+  normalizeGolfClubDraft,
   type GolfClubDraftState,
 } from "@/lib/mini-games";
 import { profit, type ScoringMode } from "@/lib/wager";
@@ -779,9 +779,9 @@ async function loadDraftEvent(eventId: string) {
     .maybeSingle();
   if (!me) fail("You’re not on this bet.");
 
-  const state = event.mini_game_state;
-  if (!isGolfClubDraft(state)) fail("Draft isn’t set up yet.");
-  return { supabase, user, event, state: state as GolfClubDraftState };
+  const state = normalizeGolfClubDraft(event.mini_game_state);
+  if (!state) fail("Draft isn’t set up yet.");
+  return { supabase, user, event, state };
 }
 
 /** Flip the next random club for in-person bidding. */
@@ -808,10 +808,14 @@ export async function revealDraftClub(eventId: string) {
   revalidatePath(`/events/${eventId}`);
 }
 
-/** After bidding in person, assign the revealed club to a player. */
+/** After bidding in person, assign the revealed club to a player with a price. */
 export async function assignDraftClub(eventId: string, formData: FormData) {
   const playerId = String(formData.get("player_id") ?? "").trim();
+  const price = Number(formData.get("price") ?? NaN);
   if (!playerId) fail("Pick who won the club.");
+  if (!Number.isFinite(price) || price < 0) {
+    fail("Enter what they paid for the club.");
+  }
 
   const { supabase, state } = await loadDraftEvent(eventId);
   if (state.status === "complete") fail("Draft is already done.");
@@ -824,9 +828,23 @@ export async function assignDraftClub(eventId: string, formData: FormData) {
     fail("That player already has enough clubs.");
   }
 
+  const budgetLeft = state.budgets[playerId] ?? state.budgetStart;
+  if (price > budgetLeft) {
+    fail(
+      `Not enough budget — only $${budgetLeft.toFixed(0)} left (of $${state.budgetStart}).`
+    );
+  }
+
   const picks = {
     ...state.picks,
-    [playerId]: [...state.picks[playerId], state.current],
+    [playerId]: [
+      ...state.picks[playerId],
+      { club: state.current, price },
+    ],
+  };
+  const budgets = {
+    ...state.budgets,
+    [playerId]: Math.round((budgetLeft - price) * 100) / 100,
   };
   const complete = Object.values(picks).every(
     (clubs) => clubs.length >= state.picksEach
@@ -834,6 +852,7 @@ export async function assignDraftClub(eventId: string, formData: FormData) {
   const next: GolfClubDraftState = {
     ...state,
     picks,
+    budgets,
     current: null,
     status: complete ? "complete" : "drafting",
   };

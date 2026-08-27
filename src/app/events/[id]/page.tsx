@@ -12,7 +12,7 @@ import {
 import { BetClaimPanel } from "@/components/bet-claim-panel";
 import { GolfClubDraftPanel } from "@/components/golf-club-draft-panel";
 import { createClient } from "@/lib/supabase/server";
-import { isGolfClubDraft } from "@/lib/mini-games";
+import { isGolfClubDraft, normalizeGolfClubDraft } from "@/lib/mini-games";
 import {
   eventKindLabel,
   formatMoney,
@@ -229,7 +229,7 @@ export default async function EventPage({ params }: Props) {
         isGolfClubDraft(event.mini_game_state) && (
           <GolfClubDraftPanel
             eventId={id}
-            state={event.mini_game_state}
+            state={normalizeGolfClubDraft(event.mini_game_state)!}
             players={
               players?.map((p) => ({
                 user_id: p.user_id,

@@ -17,19 +17,37 @@ export function GolfClubDraftPanel({
   players: Player[];
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [price, setPrice] = useState("");
   const [pending, startTransition] = useTransition();
 
   const draftPlayerIds = Object.keys(state.picks);
-  const draftPlayers = players.filter((p) => draftPlayerIds.includes(p.user_id));
+  const draftPlayers = players.filter((p) =>
+    draftPlayerIds.includes(p.user_id)
+  );
 
   function run(action: () => Promise<void>) {
     setError(null);
     startTransition(async () => {
       try {
         await action();
+        setPrice("");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Something went wrong.");
       }
+    });
+  }
+
+  function assignTo(playerId: string) {
+    const amount = Number(price);
+    if (!Number.isFinite(amount) || amount < 0) {
+      setError("Enter the auction price they paid.");
+      return;
+    }
+    run(async () => {
+      const fd = new FormData();
+      fd.set("player_id", playerId);
+      fd.set("price", String(amount));
+      await assignDraftClub(eventId, fd);
     });
   }
 
@@ -42,8 +60,9 @@ export function GolfClubDraftPanel({
         GOLF CLUB DRAFT
       </h2>
       <p className="mt-2 text-sm text-muted">
-        Flip a club, bid in person, then tap who won it. First to{" "}
-        {state.picksEach} clubs each — leftover clubs stay in the bag.
+        Flip a club, bid in person, enter what they paid, then assign it. Each
+        player starts with ${state.budgetStart} — spend it down until you both
+        have {state.picksEach} clubs.
       </p>
 
       {state.status === "complete" ? (
@@ -51,30 +70,49 @@ export function GolfClubDraftPanel({
       ) : null}
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        {draftPlayers.map((p) => (
-          <div
-            key={p.user_id}
-            className="rounded-2xl border border-line bg-bg/70 p-3"
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-              {p.name}{" "}
-              <span className="text-fg">
-                ({state.picks[p.user_id]?.length ?? 0}/{state.picksEach})
-              </span>
-            </p>
-            <ul className="mt-2 space-y-1 text-sm">
-              {(state.picks[p.user_id] ?? []).length === 0 ? (
-                <li className="text-muted">No clubs yet</li>
-              ) : (
-                (state.picks[p.user_id] ?? []).map((club) => (
-                  <li key={club} className="font-medium">
-                    {club}
-                  </li>
-                ))
-              )}
-            </ul>
-          </div>
-        ))}
+        {draftPlayers.map((p) => {
+          const left = state.budgets[p.user_id] ?? state.budgetStart;
+          const spent = state.budgetStart - left;
+          return (
+            <div
+              key={p.user_id}
+              className="rounded-2xl border border-line bg-bg/70 p-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  {p.name}{" "}
+                  <span className="text-fg">
+                    ({state.picks[p.user_id]?.length ?? 0}/{state.picksEach})
+                  </span>
+                </p>
+                <p className="text-right text-xs">
+                  <span className="font-semibold text-accent">
+                    ${left.toFixed(0)}
+                  </span>
+                  <span className="block text-muted">left</span>
+                </p>
+              </div>
+              <p className="mt-1 text-[11px] text-muted">
+                Spent ${spent.toFixed(0)} of ${state.budgetStart}
+              </p>
+              <ul className="mt-2 space-y-1 text-sm">
+                {(state.picks[p.user_id] ?? []).length === 0 ? (
+                  <li className="text-muted">No clubs yet</li>
+                ) : (
+                  (state.picks[p.user_id] ?? []).map((pick) => (
+                    <li
+                      key={`${pick.club}-${pick.price}`}
+                      className="flex justify-between gap-2 font-medium"
+                    >
+                      <span>{pick.club}</span>
+                      <span className="text-muted">${pick.price}</span>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+          );
+        })}
       </div>
 
       {state.status === "drafting" ? (
@@ -88,27 +126,42 @@ export function GolfClubDraftPanel({
                 {state.current}
               </p>
               <p className="mt-3 text-sm text-muted">
-                Bid it out in person, then assign the winner.
+                Bid it out in person, enter the winning price, then assign.
               </p>
+
+              <label className="mx-auto mt-4 block max-w-xs text-left">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+                  Winning bid ($)
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  step="1"
+                  inputMode="decimal"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="0"
+                  className="mt-1.5 w-full rounded-2xl border border-line bg-bg-elevated px-4 py-3 text-center text-lg outline-none focus:border-accent"
+                />
+              </label>
+
               <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                 {draftPlayers.map((p) => {
                   const full =
                     (state.picks[p.user_id]?.length ?? 0) >= state.picksEach;
+                  const left = state.budgets[p.user_id] ?? state.budgetStart;
+                  const bid = Number(price);
+                  const overBudget =
+                    Number.isFinite(bid) && bid > left && price !== "";
                   return (
                     <button
                       key={p.user_id}
                       type="button"
-                      disabled={pending || full}
-                      onClick={() =>
-                        run(async () => {
-                          const fd = new FormData();
-                          fd.set("player_id", p.user_id);
-                          await assignDraftClub(eventId, fd);
-                        })
-                      }
+                      disabled={pending || full || overBudget}
+                      onClick={() => assignTo(p.user_id)}
                       className="flex-1 rounded-2xl bg-accent py-3 text-sm font-bold uppercase tracking-wide text-accent-ink disabled:opacity-40"
                     >
-                      {p.name} gets it
+                      {p.name} · ${left.toFixed(0)} left
                     </button>
                   );
                 })}
