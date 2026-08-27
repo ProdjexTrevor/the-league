@@ -119,6 +119,7 @@ export function QuickBetForm({
       ? defaultTripId
       : ""
   );
+  const [miniGame, setMiniGame] = useState("");
   const [wagerType, setWagerType] = useState<"straight" | "odds">("straight");
   const [matchup, setMatchup] = useState<"person" | "team">("person");
   const [myStake, setMyStake] = useState("20");
@@ -216,6 +217,7 @@ export function QuickBetForm({
                 if (p.id !== "pro-game") {
                   setTitle(p.title);
                 }
+                if (p.id !== "h2h") setMiniGame("");
               }}
               className={`flex min-h-[5.5rem] flex-col items-center justify-center gap-2 rounded-2xl border px-2 py-3 text-center transition ${
                 selected
@@ -257,6 +259,7 @@ export function QuickBetForm({
         <input type="hidden" name="stake_a" value={stakeA} />
         <input type="hidden" name="stake_b" value={stakeB} />
         <input type="hidden" name="trip_id" value={tripId} />
+        <input type="hidden" name="mini_game" value={miniGame} />
 
         {trips.length > 0 ? (
           <label className="block">
@@ -295,6 +298,28 @@ export function QuickBetForm({
             className={field}
           />
         </label>
+
+        {presetId === "h2h" ? (
+          <label className="block">
+            <span className={labelCls}>Game within the game</span>
+            <select
+              value={miniGame}
+              onChange={(e) => setMiniGame(e.target.value)}
+              className={field}
+            >
+              <option value="">None — just the head-to-head</option>
+              <option value="golf_club_draft">
+                Golf Club Draft (random 3 clubs each)
+              </option>
+            </select>
+            {miniGame === "golf_club_draft" ? (
+              <p className="mt-2 text-xs text-muted">
+                After you lock the bet, the app flips clubs one at a time. You
+                bid in person, then assign each club until you both have 3.
+              </p>
+            ) : null}
+          </label>
+        ) : null}
 
         <div className="space-y-2">
           <p className={labelCls}>Stake style</p>

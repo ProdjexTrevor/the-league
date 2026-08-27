@@ -65,6 +65,8 @@ type Events = {
   created_at: string;
   updated_at: string;
   trip_id: string | null;
+  mini_game: string | null;
+  mini_game_state: Record<string, unknown> | null;
 };
 
 type EventPlayers = {
@@ -201,6 +203,8 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           trip_id?: string | null;
+          mini_game?: string | null;
+          mini_game_state?: Record<string, unknown> | null;
         };
         Update: Partial<Events>;
         Relationships: [];

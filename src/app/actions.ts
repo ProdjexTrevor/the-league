@@ -4,6 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import {
+  draftNeedsMorePicks,
+  initGolfClubDraft,
+  isGolfClubDraft,
+  type GolfClubDraftState,
+} from "@/lib/mini-games";
 import { profit, type ScoringMode } from "@/lib/wager";
 
 export async function signOut() {
@@ -216,6 +222,9 @@ export async function quickBet(formData: FormData) {
 
   const tripId = String(formData.get("trip_id") ?? "").trim();
   if (tripId) fd.set("trip_id", tripId);
+
+  const miniGame = String(formData.get("mini_game") ?? "").trim();
+  if (miniGame) fd.set("mini_game", miniGame);
 
   if (matchup === "person") {
     const againstId = String(formData.get("against_id") ?? "").trim();
@@ -639,6 +648,23 @@ export async function createEvent(formData: FormData) {
     revalidatePath("/trips");
   }
 
+  const miniGame = String(formData.get("mini_game") ?? "").trim();
+  if (miniGame === "golf_club_draft") {
+    const draftPlayers = playerIds.slice(0, 2);
+    if (draftPlayers.length < 2) {
+      fail("Golf club draft needs two players.");
+    }
+    const state = initGolfClubDraft(draftPlayers);
+    const { error: miniError } = await supabase
+      .from("events")
+      .update({
+        mini_game: "golf_club_draft",
+        mini_game_state: state,
+      })
+      .eq("id", data.id);
+    if (miniError) fail(miniError.message);
+  }
+
   revalidatePath("/app");
   if (leagueId) revalidatePath(`/leagues/${leagueId}`);
   redirect(`/events/${data.id}`);
@@ -732,6 +758,92 @@ export async function closeTrip(tripId: string) {
 
   revalidatePath(`/trips/${tripId}`);
   revalidatePath("/trips");
+}
+
+async function loadDraftEvent(eventId: string) {
+  const { supabase, user } = await ensureProfile();
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, mini_game, mini_game_state, status")
+    .eq("id", eventId)
+    .single();
+  if (!event) fail("Event not found.");
+  if (event.mini_game !== "golf_club_draft") {
+    fail("This bet doesn’t have a golf club draft.");
+  }
+  const { data: me } = await supabase
+    .from("event_players")
+    .select("invite_status")
+    .eq("event_id", eventId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!me) fail("You’re not on this bet.");
+
+  const state = event.mini_game_state;
+  if (!isGolfClubDraft(state)) fail("Draft isn’t set up yet.");
+  return { supabase, user, event, state: state as GolfClubDraftState };
+}
+
+/** Flip the next random club for in-person bidding. */
+export async function revealDraftClub(eventId: string) {
+  const { supabase, state } = await loadDraftEvent(eventId);
+  if (state.status === "complete") fail("Draft is already done.");
+  if (state.current) fail("Assign the current club first.");
+  if (!draftNeedsMorePicks(state)) fail("Everyone already has their clubs.");
+  if (state.remaining.length === 0) fail("No clubs left in the bag.");
+
+  const idx = Math.floor(Math.random() * state.remaining.length);
+  const club = state.remaining[idx];
+  const next: GolfClubDraftState = {
+    ...state,
+    remaining: state.remaining.filter((_, i) => i !== idx),
+    current: club,
+  };
+
+  const { error } = await supabase
+    .from("events")
+    .update({ mini_game_state: next })
+    .eq("id", eventId);
+  if (error) fail(error.message);
+  revalidatePath(`/events/${eventId}`);
+}
+
+/** After bidding in person, assign the revealed club to a player. */
+export async function assignDraftClub(eventId: string, formData: FormData) {
+  const playerId = String(formData.get("player_id") ?? "").trim();
+  if (!playerId) fail("Pick who won the club.");
+
+  const { supabase, state } = await loadDraftEvent(eventId);
+  if (state.status === "complete") fail("Draft is already done.");
+  if (!state.current) fail("Reveal a club first.");
+
+  if (!(playerId in state.picks)) {
+    fail("That player isn’t in this draft.");
+  }
+  if (state.picks[playerId].length >= state.picksEach) {
+    fail("That player already has enough clubs.");
+  }
+
+  const picks = {
+    ...state.picks,
+    [playerId]: [...state.picks[playerId], state.current],
+  };
+  const complete = Object.values(picks).every(
+    (clubs) => clubs.length >= state.picksEach
+  );
+  const next: GolfClubDraftState = {
+    ...state,
+    picks,
+    current: null,
+    status: complete ? "complete" : "drafting",
+  };
+
+  const { error } = await supabase
+    .from("events")
+    .update({ mini_game_state: next })
+    .eq("id", eventId);
+  if (error) fail(error.message);
+  revalidatePath(`/events/${eventId}`);
 }
 
 export async function acceptEventInvite(eventId: string, formData: FormData) {

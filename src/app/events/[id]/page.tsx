@@ -10,7 +10,9 @@ import {
   settleEvent,
 } from "@/app/actions";
 import { BetClaimPanel } from "@/components/bet-claim-panel";
+import { GolfClubDraftPanel } from "@/components/golf-club-draft-panel";
 import { createClient } from "@/lib/supabase/server";
+import { isGolfClubDraft } from "@/lib/mini-games";
 import {
   eventKindLabel,
   formatMoney,
@@ -222,6 +224,20 @@ export default async function EventPage({ params }: Props) {
           </p>
         )}
       </header>
+
+      {event.mini_game === "golf_club_draft" &&
+        isGolfClubDraft(event.mini_game_state) && (
+          <GolfClubDraftPanel
+            eventId={id}
+            state={event.mini_game_state}
+            players={
+              players?.map((p) => ({
+                user_id: p.user_id,
+                name: nameById.get(p.user_id) ?? "Player",
+              })) ?? []
+            }
+          />
+        )}
 
       {myInviteStatus === "pending" && event.status !== "completed" && (
         <section className="mt-10 rounded-sm border border-accent/40 bg-accent/5 p-4">
