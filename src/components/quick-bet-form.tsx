@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 
 import { quickBet } from "@/app/actions";
+import { ProGamePicker } from "@/components/pro-game-picker";
 
 type Opponent = { id: string; display_name: string | null };
 
@@ -14,36 +15,42 @@ const labelCls =
 
 const PRESETS = [
   {
+    id: "match-play",
     label: "Match Play",
     title: "Match play",
     icon: "⛳",
     tone: "text-amber-300",
   },
   {
-    label: "Nassau",
-    title: "Nassau",
-    icon: "🏌️",
+    id: "pro-game",
+    label: "Pro Game",
+    title: "Pro game",
+    icon: "🏟️",
     tone: "text-amber-300",
   },
   {
+    id: "closest",
     label: "Closest to Pin",
     title: "Closest to the pin",
     icon: "🎯",
     tone: "text-amber-300",
   },
   {
+    id: "bags",
     label: "Bags to 21",
     title: "Bags to 21",
     icon: "🌽",
     tone: "text-cyan-300",
   },
   {
+    id: "dare",
     label: "Random Dare",
     title: "Random dare",
     icon: "🎲",
     tone: "text-cyan-300",
   },
   {
+    id: "h2h",
     label: "Head-to-Head",
     title: "Head-to-head",
     icon: "⚔️",
@@ -101,6 +108,8 @@ export function QuickBetForm({
   currentUserId: string;
 }) {
   const [title, setTitle] = useState("");
+  const [line, setLine] = useState("");
+  const [presetId, setPresetId] = useState<string | null>(null);
   const [wagerType, setWagerType] = useState<"straight" | "odds">("straight");
   const [matchup, setMatchup] = useState<"person" | "team">("person");
   const [myStake, setMyStake] = useState("20");
@@ -188,12 +197,17 @@ export function QuickBetForm({
 
       <div className="mt-4 grid grid-cols-3 gap-2.5">
         {PRESETS.map((p) => {
-          const selected = title === p.title;
+          const selected = presetId === p.id;
           return (
             <button
-              key={p.label}
+              key={p.id}
               type="button"
-              onClick={() => setTitle(p.title)}
+              onClick={() => {
+                setPresetId(p.id);
+                if (p.id !== "pro-game") {
+                  setTitle(p.title);
+                }
+              }}
               className={`flex min-h-[5.5rem] flex-col items-center justify-center gap-2 rounded-2xl border px-2 py-3 text-center transition ${
                 selected
                   ? "border-accent bg-accent/10 shadow-[0_0_24px_rgba(200,245,74,0.12)]"
@@ -213,8 +227,19 @@ export function QuickBetForm({
         })}
       </div>
       <p className="mt-3 text-center text-xs text-muted">
-        Tap a box to fill the bet title — edit it below anytime.
+        Tap a box to start — Pro Game pulls today&apos;s slate and lines.
       </p>
+
+      {presetId === "pro-game" ? (
+        <div className="mt-4">
+          <ProGamePicker
+            onPick={({ title: t, line: l }) => {
+              setTitle(t);
+              setLine(l);
+            }}
+          />
+        </div>
+      ) : null}
 
       <form action={onSubmit} className="mt-5 space-y-4">
         <input type="hidden" name="catalog_id" value={catalogId} />
@@ -413,6 +438,8 @@ export function QuickBetForm({
           <span className={labelCls}>Line / handicap (optional)</span>
           <input
             name="line"
+            value={line}
+            onChange={(e) => setLine(e.target.value)}
             placeholder="I give 2 strokes"
             className={field}
           />
