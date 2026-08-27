@@ -214,6 +214,9 @@ export async function quickBet(formData: FormData) {
     .join("\n");
   fd.set("notes", notes || title);
 
+  const tripId = String(formData.get("trip_id") ?? "").trim();
+  if (tripId) fd.set("trip_id", tripId);
+
   if (matchup === "person") {
     const againstId = String(formData.get("against_id") ?? "").trim();
     const myStake = Number(formData.get("my_stake") ?? 0);
@@ -610,9 +613,125 @@ export async function createEvent(formData: FormData) {
     }
   }
 
+  const tripId = String(formData.get("trip_id") ?? "").trim();
+  if (tripId) {
+    const { data: membership } = await supabase
+      .from("trip_members")
+      .select("trip_id")
+      .eq("trip_id", tripId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!membership) fail("You’re not on that trip.");
+
+    const { error: tripError } = await supabase
+      .from("events")
+      .update({ trip_id: tripId })
+      .eq("id", data.id);
+    if (tripError) fail(tripError.message);
+
+    for (const playerId of playerIds) {
+      await supabase.from("trip_members").upsert(
+        { trip_id: tripId, user_id: playerId },
+        { onConflict: "trip_id,user_id" }
+      );
+    }
+    revalidatePath(`/trips/${tripId}`);
+    revalidatePath("/trips");
+  }
+
   revalidatePath("/app");
   if (leagueId) revalidatePath(`/leagues/${leagueId}`);
   redirect(`/events/${data.id}`);
+}
+
+export async function createTrip(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const startsOn = String(formData.get("starts_on") ?? "").trim() || null;
+  const endsOn = String(formData.get("ends_on") ?? "").trim() || null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const memberIds = [
+    ...new Set(
+      formData
+        .getAll("member_id")
+        .map((v) => String(v))
+        .filter(Boolean)
+    ),
+  ];
+
+  if (!name) fail("Name the trip or weekend.");
+
+  const { supabase, user } = await ensureProfile();
+  const { data, error } = await supabase
+    .from("trips")
+    .insert({
+      name,
+      created_by: user.id,
+      starts_on: startsOn,
+      ends_on: endsOn,
+      notes,
+    })
+    .select("id")
+    .single();
+  if (error || !data) fail(error?.message ?? "Could not create trip.");
+
+  const members = [...new Set([user.id, ...memberIds])];
+  const { error: memError } = await supabase.from("trip_members").insert(
+    members.map((user_id) => ({ trip_id: data.id, user_id }))
+  );
+  if (memError) fail(memError.message);
+
+  revalidatePath("/trips");
+  redirect(`/trips/${data.id}`);
+}
+
+export async function addTripMembers(tripId: string, formData: FormData) {
+  const memberIds = [
+    ...new Set(
+      formData
+        .getAll("member_id")
+        .map((v) => String(v))
+        .filter(Boolean)
+    ),
+  ];
+  if (memberIds.length === 0) fail("Pick at least one person.");
+
+  const { supabase, user } = await ensureProfile();
+  const { data: trip } = await supabase
+    .from("trips")
+    .select("id, created_by")
+    .eq("id", tripId)
+    .single();
+  if (!trip) fail("Trip not found.");
+  if (trip.created_by !== user.id) fail("Only the trip creator can add people.");
+
+  const { error } = await supabase.from("trip_members").upsert(
+    memberIds.map((user_id) => ({ trip_id: tripId, user_id })),
+    { onConflict: "trip_id,user_id" }
+  );
+  if (error) fail(error.message);
+
+  revalidatePath(`/trips/${tripId}`);
+  revalidatePath("/trips");
+}
+
+export async function closeTrip(tripId: string) {
+  const { supabase, user } = await ensureProfile();
+  const { data: trip } = await supabase
+    .from("trips")
+    .select("id, created_by")
+    .eq("id", tripId)
+    .single();
+  if (!trip) fail("Trip not found.");
+  if (trip.created_by !== user.id) fail("Only the trip creator can close it.");
+
+  const { error } = await supabase
+    .from("trips")
+    .update({ status: "closed" })
+    .eq("id", tripId);
+  if (error) fail(error.message);
+
+  revalidatePath(`/trips/${tripId}`);
+  revalidatePath("/trips");
 }
 
 export async function acceptEventInvite(eventId: string, formData: FormData) {
@@ -1070,6 +1189,7 @@ export async function settleEvent(eventId: string, formData: FormData) {
   if (event.league_id) revalidatePath(`/leagues/${event.league_id}`);
   revalidatePath("/app");
   revalidatePath("/wallet");
+  revalidatePath("/trips");
 }
 
 // --- Legacy game helpers (old routes) ------------------------------------------

@@ -8,30 +8,38 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 type Props = {
-  searchParams: Promise<{ against?: string }>;
+  searchParams: Promise<{ against?: string; trip?: string }>;
 };
 
 export default async function BetPage({ searchParams }: Props) {
-  const { against } = await searchParams;
+  const { against, trip } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/bet");
 
-  const [{ data: memberships }, { data: propCatalog }, { data: allProfiles }] =
-    await Promise.all([
-      supabase
-        .from("league_members")
-        .select("leagues(id)")
-        .eq("user_id", user.id),
-      supabase
-        .from("game_catalog")
-        .select("id")
-        .eq("slug", "proposition")
-        .maybeSingle(),
-      supabase.from("profiles").select("id, display_name").order("display_name"),
-    ]);
+  const [
+    { data: memberships },
+    { data: propCatalog },
+    { data: allProfiles },
+    { data: tripMemberships },
+  ] = await Promise.all([
+    supabase
+      .from("league_members")
+      .select("leagues(id)")
+      .eq("user_id", user.id),
+    supabase
+      .from("game_catalog")
+      .select("id")
+      .eq("slug", "proposition")
+      .maybeSingle(),
+    supabase.from("profiles").select("id, display_name").order("display_name"),
+    supabase
+      .from("trip_members")
+      .select("trip_id, trips(id, name, status)")
+      .eq("user_id", user.id),
+  ]);
 
   const leagueIds =
     memberships
@@ -68,6 +76,15 @@ export default async function BetPage({ searchParams }: Props) {
     (a.display_name ?? "").localeCompare(b.display_name ?? "")
   );
 
+  const trips = (tripMemberships ?? [])
+    .map((m) => {
+      const t = Array.isArray(m.trips) ? m.trips[0] : m.trips;
+      return t;
+    })
+    .filter((t): t is { id: string; name: string; status: string } => !!t)
+    .filter((t) => t.status === "open")
+    .map((t) => ({ id: t.id, name: t.name }));
+
   const catalogId = propCatalog?.id ?? "";
 
   return (
@@ -76,8 +93,7 @@ export default async function BetPage({ searchParams }: Props) {
         No bookies · just friends
       </p>
       <h1 className="font-display text-4xl tracking-[0.04em] text-fg sm:text-5xl">
-        SET THE{" "}
-        <span className="text-accent">LINE</span>
+        SET THE <span className="text-accent">LINE</span>
       </h1>
       <p className="mt-2 max-w-sm text-sm text-muted">
         Set the bet, set the line, shake on it. We keep the receipt.
@@ -91,6 +107,8 @@ export default async function BetPage({ searchParams }: Props) {
             showHeading
             defaultAgainstId={against ?? ""}
             currentUserId={user.id}
+            trips={trips}
+            defaultTripId={trip ?? ""}
           />
         ) : (
           <p className="text-sm text-muted">
@@ -104,9 +122,9 @@ export default async function BetPage({ searchParams }: Props) {
       </div>
 
       <p className="mt-8 text-center text-xs text-muted">
-        Leagues or tournaments?{" "}
-        <Link href="/create" className="text-accent hover:underline">
-          Full create
+        Running a weekend tab?{" "}
+        <Link href="/trips" className="text-accent hover:underline">
+          Open The Tab
         </Link>
       </p>
     </AppShell>

@@ -100,16 +100,25 @@ export function QuickBetForm({
   showHeading = true,
   defaultAgainstId = "",
   currentUserId,
+  trips = [],
+  defaultTripId = "",
 }: {
   catalogId: string;
   opponents: Opponent[];
   showHeading?: boolean;
   defaultAgainstId?: string;
   currentUserId: string;
+  trips?: { id: string; name: string }[];
+  defaultTripId?: string;
 }) {
   const [title, setTitle] = useState("");
   const [line, setLine] = useState("");
   const [presetId, setPresetId] = useState<string | null>(null);
+  const [tripId, setTripId] = useState(
+    defaultTripId && trips.some((t) => t.id === defaultTripId)
+      ? defaultTripId
+      : ""
+  );
   const [wagerType, setWagerType] = useState<"straight" | "odds">("straight");
   const [matchup, setMatchup] = useState<"person" | "team">("person");
   const [myStake, setMyStake] = useState("20");
@@ -247,6 +256,33 @@ export function QuickBetForm({
         <input type="hidden" name="their_stake" value={theirStake} />
         <input type="hidden" name="stake_a" value={stakeA} />
         <input type="hidden" name="stake_b" value={stakeB} />
+        <input type="hidden" name="trip_id" value={tripId} />
+
+        {trips.length > 0 ? (
+          <label className="block">
+            <span className={labelCls}>Put on a tab (optional)</span>
+            <select
+              value={tripId}
+              onChange={(e) => setTripId(e.target.value)}
+              className={field}
+            >
+              <option value="">No tab — standalone bet</option>
+              {trips.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <p className="text-xs text-muted">
+            Want a weekend running tally?{" "}
+            <a href="/trips" className="text-accent hover:underline">
+              Open a tab
+            </a>
+            .
+          </p>
+        )}
 
         <label className="block">
           <span className={labelCls}>What&apos;s the bet?</span>

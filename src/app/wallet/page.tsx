@@ -83,7 +83,11 @@ export default async function WalletPage() {
   return (
     <AppShell userId={user.id} title="Wallet">
       <p className="mb-4 text-sm text-muted">
-        Pay opens Venmo with their username filled in.
+        Pay opens Venmo with their username filled in. For a weekend of bets, use{" "}
+        <a href="/trips" className="text-accent hover:underline">
+          The Tab
+        </a>{" "}
+        to net who owes whom.
       </p>
       {walletError ? (
         <p className="mb-4 text-sm text-danger">

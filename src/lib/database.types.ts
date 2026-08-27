@@ -64,6 +64,7 @@ type Events = {
   played_at: string | null;
   created_at: string;
   updated_at: string;
+  trip_id: string | null;
 };
 
 type EventPlayers = {
@@ -199,6 +200,7 @@ export type Database = {
           played_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          trip_id?: string | null;
         };
         Update: Partial<Events>;
         Relationships: [];
@@ -334,6 +336,57 @@ export type Database = {
           user_id?: string;
           winner_key?: string;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      trips: {
+        Row: {
+          id: string;
+          name: string;
+          created_by: string;
+          starts_on: string | null;
+          ends_on: string | null;
+          status: string;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          created_by: string;
+          starts_on?: string | null;
+          ends_on?: string | null;
+          status?: string;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          created_by?: string;
+          starts_on?: string | null;
+          ends_on?: string | null;
+          status?: string;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      trip_members: {
+        Row: {
+          trip_id: string;
+          user_id: string;
+          joined_at: string;
+        };
+        Insert: {
+          trip_id: string;
+          user_id: string;
+          joined_at?: string;
+        };
+        Update: {
+          trip_id?: string;
+          user_id?: string;
+          joined_at?: string;
         };
         Relationships: [];
       };
