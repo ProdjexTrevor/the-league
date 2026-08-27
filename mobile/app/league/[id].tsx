@@ -1,16 +1,18 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text } from "react-native";
+import { ActivityIndicator } from "react-native";
 
 import {
-  ListRow,
-  ListSection,
-  Muted,
+  ActionTile,
+  BigButton,
+  EmptyState,
+  PageTitle,
   Screen,
-  SectionTitle,
+  SectionLabel,
+  Subtle,
 } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
-import { colors, spacing } from "@/lib/theme";
+import { eventKindLabel } from "@/lib/theme";
 
 export default function LeagueDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -66,65 +68,39 @@ export default function LeagueDetailScreen() {
   }, [load]);
 
   return (
-    <Screen>
-      <Pressable onPress={() => router.back()}>
-        <Text style={{ color: colors.muted, fontFamily: "DMSans_400Regular", fontSize: 14 }}>
-          ← Back
-        </Text>
-      </Pressable>
+    <Screen
+      bottomBar={
+        <BigButton label="Back" mode="outlined" icon="arrow-left" onPress={() => router.back()} />
+      }
+    >
       {loading || !league ? (
-        <ActivityIndicator color={colors.accent} style={{ marginTop: 32 }} />
+        <ActivityIndicator style={{ marginTop: 40 }} size="large" />
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false}>
-          <Text
-            style={{
-              fontFamily: "DMSans_700Bold",
-              fontSize: 22,
-              color: colors.fg,
-              marginTop: 24,
-            }}
-          >
-            {league.name}
-          </Text>
-          <Muted>Invite code {league.invite_code}</Muted>
-          {league.description ? <Muted>{league.description}</Muted> : null}
+        <>
+          <PageTitle>{league.name}</PageTitle>
+          <Subtle>Invite code {league.invite_code}</Subtle>
+          {league.description ? <Subtle>{league.description}</Subtle> : null}
 
-          <SectionTitle>Members</SectionTitle>
-          <ListSection>
-            {members.map((m, i) => (
-              <ListRow
-                key={`${m.display_name}-${i}`}
-                title={m.display_name ?? "Player"}
-                isFirst={i === 0}
-                isLast={i === members.length - 1}
-              />
-            ))}
-          </ListSection>
+          <SectionLabel>Members</SectionLabel>
+          {members.map((m, i) => (
+            <ActionTile key={`${m.display_name}-${i}`} title={m.display_name ?? "Player"} />
+          ))}
 
-          <SectionTitle>Events</SectionTitle>
+          <SectionLabel>Events</SectionLabel>
           {events.length === 0 ? (
-            <Muted>No events in this league yet.</Muted>
+            <EmptyState message="No events in this league yet." />
           ) : (
-            <ListSection>
-              {events.map((e, i) => (
-                <ListRow
-                  key={e.id}
-                  title={e.title}
-                  subtitle={`${e.kind} · ${e.status}`}
-                  onPress={() => router.push(`/event/${e.id}`)}
-                  isFirst={i === 0}
-                  isLast={i === events.length - 1}
-                />
-              ))}
-            </ListSection>
+            events.map((e) => (
+              <ActionTile
+                key={e.id}
+                title={e.title}
+                subtitle={`${eventKindLabel(e.kind)} · ${e.status}`}
+                onPress={() => router.push(`/event/${e.id}`)}
+              />
+            ))
           )}
-          <ViewSpacer />
-        </ScrollView>
+        </>
       )}
     </Screen>
   );
-}
-
-function ViewSpacer() {
-  return <Text style={{ height: spacing.xl }}> </Text>;
 }

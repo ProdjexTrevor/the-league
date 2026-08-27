@@ -1,29 +1,22 @@
 import * as Linking from "expo-linking";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Alert, View } from "react-native";
+import { Text } from "react-native-paper";
 
 import {
-  BrandTitle,
-  Field,
-  ListRow,
-  ListSection,
-  Muted,
-  PrimaryButton,
+  ActionTile,
+  BigButton,
+  BrandMark,
+  EmptyState,
   Screen,
-  SectionTitle,
+  SectionLabel,
+  Subtle,
 } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
-import { colors, spacing } from "@/lib/theme";
-import { formatMoney, normalizeVenmoUsername, venmoPayUrl } from "@/lib/venmo";
+import { colors } from "@/lib/theme";
+import { formatMoney, venmoPayUrl } from "@/lib/venmo";
 
 type Obligation = {
   id: string;
@@ -42,13 +35,11 @@ export default function WalletScreen() {
   const [owed, setOwed] = useState<Obligation[]>([]);
   const [owedToMe, setOwedToMe] = useState<Obligation[]>([]);
   const [venmo, setVenmo] = useState<string | null>(null);
-  const [venmoDraft, setVenmoDraft] = useState("");
-  const [savingVenmo, setSavingVenmo] = useState(false);
+  const [selected, setSelected] = useState<Obligation | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    await supabase.rpc("repair_my_wallet_obligations");
     const [{ data: me }, { data, error }] = await Promise.all([
       supabase.from("profiles").select("venmo_username").eq("id", user.id).maybeSingle(),
       supabase
@@ -58,9 +49,7 @@ export default function WalletScreen() {
         .or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`),
     ]);
 
-    const username = me?.venmo_username ?? null;
-    setVenmo(username);
-    setVenmoDraft(username ?? "");
+    setVenmo(me?.venmo_username ?? null);
 
     if (error) {
       setLoading(false);
@@ -89,8 +78,13 @@ export default function WalletScreen() {
       event: Array.isArray(r.events) ? r.events[0] : r.events,
     })) as Obligation[];
 
-    setOwed(enriched.filter((r) => r.from_user_id === user.id));
+    const mine = enriched.filter((r) => r.from_user_id === user.id);
+    setOwed(mine);
     setOwedToMe(enriched.filter((r) => r.to_user_id === user.id));
+    setSelected((prev) => {
+      if (!prev) return mine[0] ?? null;
+      return mine.find((r) => r.id === prev.id) ?? mine[0] ?? null;
+    });
     setLoading(false);
   }, [user]);
 
@@ -99,28 +93,6 @@ export default function WalletScreen() {
       void load();
     }, [load])
   );
-
-  async function saveVenmo() {
-    if (!user) return;
-    const next = normalizeVenmoUsername(venmoDraft);
-    if (!next) {
-      Alert.alert("Venmo username required");
-      return;
-    }
-    setSavingVenmo(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ venmo_username: next })
-      .eq("id", user.id);
-    setSavingVenmo(false);
-    if (error) {
-      Alert.alert("Couldn’t save Venmo", error.message);
-      return;
-    }
-    setVenmo(next);
-    setVenmoDraft(next);
-    Alert.alert("Saved", `Venmo @${next}`);
-  }
 
   async function markPaid(id: string) {
     const { error } = await supabase
@@ -153,135 +125,91 @@ export default function WalletScreen() {
   const totalDue = owedToMe.reduce((s, r) => s + r.amount, 0);
 
   return (
-    <Screen safeBottom={false}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <Pressable onPress={() => router.push("/(tabs)/home")}>
-          <BrandTitle size="md" />
-        </Pressable>
-        <Muted>
-          Track what you owe after settled games. Pay opens Venmo with their
-          username filled in.
-        </Muted>
-
-        <View
-          style={{
-            flexDirection: "row",
-            gap: 24,
-            marginTop: 32,
-            paddingBottom: 8,
-            borderBottomWidth: StyleSheetHairline,
-            borderBottomColor: colors.line,
-          }}
-        >
-          <View>
-            <Text style={statLabel}>You owe</Text>
-            <Text style={statValue}>{formatMoney(totalOwed)}</Text>
+    <Screen
+      bottomBar={
+        selected ? (
+          <View style={{ gap: 10 }}>
+            <BigButton
+              label={`Pay ${formatMoney(selected.amount)} on Venmo`}
+              icon="cash"
+              onPress={() => void payOnVenmo(selected)}
+            />
+            <BigButton
+              label="Mark paid"
+              mode="outlined"
+              icon="check"
+              onPress={() => void markPaid(selected.id)}
+            />
           </View>
-          <View>
-            <Text style={statLabel}>Owed to you</Text>
-            <Text style={statValue}>{formatMoney(totalDue)}</Text>
-          </View>
-        </View>
-
-        <SectionTitle>Your Venmo</SectionTitle>
-        <Field
-          label="Username"
-          autoCapitalize="none"
-          autoCorrect={false}
-          value={venmoDraft}
-          onChangeText={setVenmoDraft}
-          placeholder={venmo ? `@${venmo}` : "@yourname"}
-        />
-        <PrimaryButton
-          label={savingVenmo ? "Saving…" : "Save Venmo"}
-          onPress={() => void saveVenmo()}
-          disabled={savingVenmo}
-          style={{ marginTop: 12, alignSelf: "flex-start" }}
-        />
-
-        {loading ? (
-          <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
         ) : (
-          <>
-            <SectionTitle>You owe</SectionTitle>
-            {owed.length === 0 ? (
-              <Muted>You’re square.</Muted>
-            ) : (
-              <ListSection>
-                {owed.map((row, i) => (
-                  <View key={row.id}>
-                    <ListRow
-                      title={`${formatMoney(row.amount)} → ${row.to_profile?.display_name ?? "Player"}`}
-                      subtitle={
-                        row.event?.title
-                          ? `${row.event.title}${
-                              row.to_profile?.venmo_username
-                                ? ` · @${row.to_profile.venmo_username}`
-                                : ""
-                            }`
-                          : undefined
-                      }
-                      isFirst={i === 0}
-                      isLast={i === owed.length - 1}
-                    />
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        gap: 16,
-                        paddingBottom: 12,
-                        marginTop: -4,
-                      }}
-                    >
-                      <Pressable onPress={() => void payOnVenmo(row)}>
-                        <Text style={{ color: colors.accent, fontFamily: "DMSans_700Bold", fontSize: 14 }}>
-                          Pay on Venmo
-                        </Text>
-                      </Pressable>
-                      <Pressable onPress={() => void markPaid(row.id)}>
-                        <Text style={{ color: colors.muted, fontFamily: "DMSans_700Bold", fontSize: 14 }}>
-                          Mark paid
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                ))}
-              </ListSection>
-            )}
+          <BigButton
+            label="Back home"
+            mode="outlined"
+            icon="home"
+            onPress={() => router.push("/(tabs)/home")}
+          />
+        )
+      }
+    >
+      <BrandMark compact />
+      <Subtle>{venmo ? `Your Venmo @${venmo}` : "Add Venmo on the web if missing."}</Subtle>
 
-            <SectionTitle>Owed to you</SectionTitle>
-            {owedToMe.length === 0 ? (
-              <Muted>Nobody owes you right now.</Muted>
-            ) : (
-              <ListSection>
-                {owedToMe.map((row, i) => (
-                  <ListRow
-                    key={row.id}
-                    title={`${formatMoney(row.amount)} from ${row.from_profile?.display_name ?? "Player"}`}
-                    subtitle={row.event?.title ?? undefined}
-                    isFirst={i === 0}
-                    isLast={i === owedToMe.length - 1}
-                  />
-                ))}
-              </ListSection>
-            )}
-            <View style={{ height: spacing.xl }} />
-          </>
-        )}
-      </ScrollView>
+      <View style={{ flexDirection: "row", gap: 16, marginTop: 24 }}>
+        <View style={{ flex: 1, backgroundColor: colors.elevated, borderRadius: 16, padding: 16 }}>
+          <Text style={{ color: colors.muted, fontFamily: "DMSans_400Regular" }}>You owe</Text>
+          <Text style={{ color: colors.fg, fontFamily: "DMSans_700Bold", fontSize: 24, marginTop: 4 }}>
+            {formatMoney(totalOwed)}
+          </Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: colors.elevated, borderRadius: 16, padding: 16 }}>
+          <Text style={{ color: colors.muted, fontFamily: "DMSans_400Regular" }}>Owed to you</Text>
+          <Text style={{ color: colors.fg, fontFamily: "DMSans_700Bold", fontSize: 24, marginTop: 4 }}>
+            {formatMoney(totalDue)}
+          </Text>
+        </View>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} size="large" />
+      ) : (
+        <>
+          <SectionLabel>Tap to pay</SectionLabel>
+          {owed.length === 0 ? (
+            <EmptyState message="You’re square. Nothing to pay." />
+          ) : (
+            owed.map((row) => (
+              <ActionTile
+                key={row.id}
+                title={`${formatMoney(row.amount)} → ${row.to_profile?.display_name ?? "Player"}`}
+                subtitle={
+                  row.event?.title
+                    ? `${row.event.title}${
+                        row.to_profile?.venmo_username
+                          ? ` · @${row.to_profile.venmo_username}`
+                          : ""
+                      }`
+                    : undefined
+                }
+                meta={selected?.id === row.id ? "Selected" : "Select"}
+                onPress={() => setSelected(row)}
+              />
+            ))
+          )}
+
+          <SectionLabel>Coming to you</SectionLabel>
+          {owedToMe.length === 0 ? (
+            <EmptyState message="Nobody owes you right now." />
+          ) : (
+            owedToMe.map((row) => (
+              <ActionTile
+                key={row.id}
+                title={`${formatMoney(row.amount)} from ${row.from_profile?.display_name ?? "Player"}`}
+                subtitle={row.event?.title ?? undefined}
+              />
+            ))
+          )}
+        </>
+      )}
     </Screen>
   );
 }
-
-const StyleSheetHairline = 1 / 2;
-
-const statLabel = {
-  fontFamily: "DMSans_400Regular" as const,
-  fontSize: 13,
-  color: colors.muted,
-};
-const statValue = {
-  fontFamily: "DMSans_700Bold" as const,
-  fontSize: 22,
-  color: colors.fg,
-  marginTop: 4,
-};

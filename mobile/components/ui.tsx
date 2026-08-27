@@ -1,307 +1,329 @@
 import { LinearGradient } from "expo-linear-gradient";
+import { ReactNode } from "react";
+import { ScrollView, StyleSheet, View, type ViewStyle } from "react-native";
 import {
-  Pressable,
-  StyleSheet,
+  Button,
+  Card,
+  HelperText,
   Text,
   TextInput,
-  View,
-  type TextInputProps,
-  type ViewStyle,
-} from "react-native";
+  TouchableRipple,
+} from "react-native-paper";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors, spacing } from "@/lib/theme";
 
+const HIT = 52; // comfortable one-thumb target
+
 export function Screen({
   children,
   style,
-  padded = true,
-  /** When false (tab screens), skip bottom safe-area — the tab bar owns it. */
-  safeBottom = true,
+  scroll = true,
+  bottomBar,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   style?: ViewStyle;
-  padded?: boolean;
-  safeBottom?: boolean;
+  scroll?: boolean;
+  /** Sticky bottom action zone (thumb-friendly) */
+  bottomBar?: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
+  const body = scroll ? (
+    <ScrollView
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={[
+        styles.scrollContent,
+        { paddingBottom: bottomBar ? 24 : insets.bottom + 24 },
+        style,
+      ]}
+    >
+      {children}
+    </ScrollView>
+  ) : (
+    <View style={[{ flex: 1 }, style]}>{children}</View>
+  );
+
   return (
     <View style={styles.root}>
       <LinearGradient
         colors={[colors.limeGlow, "transparent"]}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.6, y: 0.45 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-      <LinearGradient
-        colors={[colors.greenGlow, "transparent"]}
-        start={{ x: 0.95, y: 0 }}
-        end={{ x: 0.4, y: 0.4 }}
+        start={{ x: 0.05, y: 0 }}
+        end={{ x: 0.55, y: 0.4 }}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
       <View
         style={[
           styles.screen,
-          padded && {
+          {
+            paddingTop: insets.top + 12,
             paddingHorizontal: 16,
-            paddingTop: insets.top + 16,
-            paddingBottom: (safeBottom ? insets.bottom : 0) + 8,
           },
-          style,
         ]}
       >
-        {children}
+        {body}
+        {bottomBar ? (
+          <View
+            style={[
+              styles.bottomBar,
+              { paddingBottom: Math.max(insets.bottom, 12) },
+            ]}
+          >
+            {bottomBar}
+          </View>
+        ) : null}
       </View>
     </View>
   );
 }
 
-export function BrandTitle({ size = "md" }: { size?: "md" | "lg" }) {
+export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
-    <Text style={[styles.brand, size === "lg" ? styles.brandLg : styles.brandMd]}>
+    <Text
+      variant={compact ? "headlineMedium" : "displaySmall"}
+      style={styles.brand}
+    >
       THE LEAGUE
     </Text>
   );
 }
 
-export function Heading({ children }: { children: React.ReactNode }) {
-  return <Text style={styles.heading}>{children}</Text>;
+export function PageTitle({ children }: { children: ReactNode }) {
+  return (
+    <Text variant="headlineSmall" style={styles.pageTitle}>
+      {children}
+    </Text>
+  );
 }
 
-export function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <Text style={styles.sectionTitle}>{children}</Text>;
+export function Subtle({ children }: { children: ReactNode }) {
+  return (
+    <Text variant="bodyMedium" style={styles.subtle}>
+      {children}
+    </Text>
+  );
 }
 
-export function Muted({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
-  return <Text style={[styles.muted, style as object]}>{children}</Text>;
+export function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <Text variant="titleMedium" style={styles.section}>
+      {children}
+    </Text>
+  );
 }
 
 export function Field({
   label,
-  ...props
-}: TextInputProps & { label: string }) {
+  value,
+  onChangeText,
+  error,
+  ...rest
+}: {
+  label: string;
+  value: string;
+  onChangeText: (t: string) => void;
+  error?: string;
+} & React.ComponentProps<typeof TextInput>) {
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
       <TextInput
-        placeholderTextColor={colors.muted}
+        mode="outlined"
+        label={label}
+        value={value}
+        onChangeText={onChangeText}
+        outlineColor={colors.line}
+        activeOutlineColor={colors.accent}
+        textColor={colors.fg}
         style={styles.input}
-        {...props}
+        contentStyle={{ minHeight: HIT - 8 }}
+        error={Boolean(error)}
+        {...rest}
       />
+      {error ? <HelperText type="error">{error}</HelperText> : null}
     </View>
   );
 }
 
-export function PrimaryButton({
+export function BigButton({
   label,
   onPress,
+  mode = "contained",
   disabled,
-  style,
+  icon,
+  loading,
 }: {
   label: string;
   onPress: () => void;
+  mode?: "contained" | "outlined" | "text";
   disabled?: boolean;
-  style?: ViewStyle;
+  icon?: string;
+  loading?: boolean;
 }) {
   return (
-    <Pressable
+    <Button
+      mode={mode}
       onPress={onPress}
       disabled={disabled}
-      style={[styles.button, disabled && styles.buttonDisabled, style]}
+      loading={loading}
+      icon={icon}
+      contentStyle={styles.bigBtnContent}
+      labelStyle={styles.bigBtnLabel}
+      style={styles.bigBtn}
+      buttonColor={mode === "contained" ? colors.accent : undefined}
+      textColor={mode === "contained" ? colors.accentInk : colors.fg}
     >
-      <Text style={styles.buttonText}>{label}</Text>
-    </Pressable>
+      {label}
+    </Button>
   );
 }
 
-export function SecondaryButton({
-  label,
-  onPress,
-  disabled,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={[styles.secondaryButton, disabled && styles.buttonDisabled]}
-    >
-      <Text style={styles.secondaryButtonText}>{label}</Text>
-    </Pressable>
-  );
-}
-
-/** Web-style row in a bordered divide-y list */
-export function ListRow({
+export function ActionTile({
   title,
   subtitle,
   meta,
-  metaAccent,
   onPress,
-  isFirst,
-  isLast,
 }: {
   title: string;
   subtitle?: string;
   meta?: string;
-  metaAccent?: boolean;
   onPress?: () => void;
-  isFirst?: boolean;
-  isLast?: boolean;
 }) {
-  const body = (
-    <View
-      style={[
-        styles.listRow,
-        isFirst && styles.listRowFirst,
-        isLast && styles.listRowLast,
-      ]}
-    >
-      <View style={styles.listRowMain}>
-        <Text style={styles.listRowTitle}>{title}</Text>
-        {subtitle ? <Text style={styles.listRowSubtitle}>{subtitle}</Text> : null}
-      </View>
-      {meta ? (
-        <Text style={[styles.listRowMeta, metaAccent && { color: colors.accent }]}>
-          {meta}
-        </Text>
+  return (
+    <Card style={styles.tile} mode="elevated">
+      <TouchableRipple
+        onPress={onPress}
+        borderless
+        style={styles.tileRipple}
+        disabled={!onPress}
+      >
+        <View style={styles.tileInner}>
+          <View style={styles.tileMain}>
+            <Text style={styles.tileTitle} numberOfLines={2}>
+              {title}
+            </Text>
+            {subtitle ? (
+              <Text style={styles.tileSubtitle} numberOfLines={2}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+          {meta || onPress ? (
+            <Text style={styles.tileMeta}>{meta ?? "›"}</Text>
+          ) : null}
+        </View>
+      </TouchableRipple>
+    </Card>
+  );
+}
+
+export function EmptyState({
+  message,
+  actionLabel,
+  onAction,
+}: {
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <View style={styles.empty}>
+      <Text variant="bodyMedium" style={styles.subtle}>
+        {message}
+      </Text>
+      {actionLabel && onAction ? (
+        <BigButton label={actionLabel} onPress={onAction} mode="outlined" />
       ) : null}
     </View>
   );
-
-  if (onPress) {
-    return (
-      <Pressable onPress={onPress} style={({ pressed }) => pressed && { backgroundColor: "rgba(242,245,240,0.03)" }}>
-        {body}
-      </Pressable>
-    );
-  }
-  return body;
-}
-
-export function ListSection({ children }: { children: React.ReactNode }) {
-  return <View style={styles.listSection}>{children}</View>;
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
+  root: { flex: 1, backgroundColor: colors.bg },
+  screen: { flex: 1 },
+  scrollContent: { paddingBottom: 16 },
+  bottomBar: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
     backgroundColor: colors.bg,
-  },
-  screen: {
-    flex: 1,
+    paddingTop: 12,
+    gap: 10,
   },
   brand: {
     fontFamily: "BebasNeue_400Regular",
     color: colors.fg,
-    letterSpacing: 1.2,
+    letterSpacing: 1.5,
   },
-  brandMd: { fontSize: 28 },
-  brandLg: { fontSize: 36 },
-  heading: {
+  pageTitle: {
     fontFamily: "DMSans_700Bold",
-    fontSize: 22,
     color: colors.fg,
-    marginTop: 40,
-    letterSpacing: -0.3,
+    marginTop: 20,
   },
-  sectionTitle: {
-    fontFamily: "DMSans_700Bold",
-    fontSize: 18,
-    color: colors.fg,
-    marginTop: spacing.section,
-  },
-  muted: {
+  subtle: {
     fontFamily: "DMSans_400Regular",
-    fontSize: 14,
     color: colors.muted,
-    marginTop: 8,
+    marginTop: 6,
     lineHeight: 20,
   },
-  field: { marginTop: 16 },
-  label: {
-    fontFamily: "DMSans_400Regular",
-    fontSize: 14,
-    color: colors.muted,
-    marginBottom: 6,
+  section: {
+    fontFamily: "DMSans_700Bold",
+    color: colors.fg,
+    marginTop: 28,
+    marginBottom: 10,
   },
+  field: { marginTop: 12 },
   input: {
-    borderWidth: 1,
-    borderColor: colors.line,
     backgroundColor: colors.elevated,
-    color: colors.fg,
-    borderRadius: 2,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontFamily: "DMSans_400Regular",
     fontSize: 16,
   },
-  button: {
-    backgroundColor: colors.accent,
-    borderRadius: 2,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    alignItems: "center",
+  bigBtn: {
+    borderRadius: 14,
+    minHeight: HIT,
+    justifyContent: "center",
   },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: {
+  bigBtnContent: {
+    minHeight: HIT,
+    paddingVertical: 4,
+  },
+  bigBtnLabel: {
     fontFamily: "DMSans_700Bold",
-    color: colors.accentInk,
-    fontSize: 14,
+    fontSize: 16,
+    letterSpacing: 0.2,
   },
-  secondaryButton: {
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 2,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    alignItems: "center",
+  tile: {
+    marginBottom: 10,
+    backgroundColor: colors.elevated,
+    borderRadius: 16,
+    overflow: "hidden",
   },
-  secondaryButtonText: {
-    fontFamily: "DMSans_700Bold",
-    color: colors.fg,
-    fontSize: 14,
-  },
-  listSection: {
-    marginTop: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-  },
-  listRow: {
+  tileRipple: { borderRadius: 16 },
+  tileInner: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
+    alignItems: "center",
     paddingVertical: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
+    paddingHorizontal: 16,
+    gap: 12,
+    minHeight: 72,
   },
-  listRowFirst: { borderTopWidth: 0 },
-  listRowLast: {},
-  listRowMain: { flex: 1, minWidth: 0 },
-  listRowTitle: {
-    fontFamily: "DMSans_500Medium",
-    fontSize: 16,
+  tileMain: { flex: 1 },
+  tileTitle: {
+    fontFamily: "DMSans_700Bold",
     color: colors.fg,
+    fontSize: 16,
   },
-  listRowSubtitle: {
+  tileSubtitle: {
     fontFamily: "DMSans_400Regular",
+    color: colors.muted,
+    fontSize: 13,
+    marginTop: 4,
+  },
+  tileMeta: {
+    color: colors.accent,
+    fontFamily: "DMSans_700Bold",
     fontSize: 14,
-    color: colors.muted,
-    marginTop: 2,
   },
-  listRowMeta: {
-    fontFamily: "DMSans_400Regular",
-    fontSize: 11,
-    color: colors.muted,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    paddingTop: 2,
+  empty: {
+    marginTop: 8,
+    gap: 12,
   },
 });

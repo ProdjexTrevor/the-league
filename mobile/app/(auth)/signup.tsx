@@ -1,21 +1,15 @@
 import { Link, useRouter } from "expo-router";
 import { useState } from "react";
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { Alert, View } from "react-native";
+import { Text } from "react-native-paper";
 
 import {
-  BrandTitle,
+  BigButton,
+  BrandMark,
   Field,
-  Heading,
-  Muted,
-  PrimaryButton,
+  PageTitle,
   Screen,
+  Subtle,
 } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
 import { colors } from "@/lib/theme";
@@ -55,62 +49,47 @@ export default function SignupScreen() {
   }
 
   return (
-    <Screen>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={{ flex: 1 }}
-      >
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{
-            flexGrow: 1,
-            justifyContent: "center",
-            paddingVertical: 24,
-            maxWidth: 420,
-            width: "100%",
-            alignSelf: "center",
-          }}
-        >
-          <BrandTitle size="lg" />
-          <Heading>Join the crew</Heading>
-          <Muted>Friendly wagers. Real standings. Your Venmo for payouts.</Muted>
-          <Field label="Display name" value={displayName} onChangeText={setDisplayName} />
-          <Field
-            label="Venmo username"
-            autoCapitalize="none"
-            value={venmoUsername}
-            onChangeText={setVenmoUsername}
-            placeholder="john-smith"
-          />
-          <Field
-            label="Email"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
-          <Field
-            label="Password"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
-          <PrimaryButton
-            label={loading ? "Creating…" : "Create account"}
-            onPress={onSubmit}
-            disabled={loading}
-            style={{ marginTop: 24, alignSelf: "stretch" }}
-          />
-          <View style={{ marginTop: 24 }}>
-            <Link href="/(auth)/login">
-              <Text style={{ color: colors.muted, fontFamily: "DMSans_400Regular", fontSize: 14 }}>
-                Already have an account?{" "}
-                <Text style={{ color: colors.accent }}>Log in</Text>
-              </Text>
-            </Link>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+    <Screen
+      bottomBar={
+        <BigButton
+          label={loading ? "Creating…" : "Create account"}
+          onPress={onSubmit}
+          loading={loading}
+          disabled={loading}
+          icon="account-plus"
+        />
+      }
+    >
+      <View style={{ paddingTop: 12 }}>
+        <BrandMark />
+        <PageTitle>Join the crew</PageTitle>
+        <Subtle>Friendly wagers. Real standings. Venmo for payouts.</Subtle>
+        <Field label="Display name" value={displayName} onChangeText={setDisplayName} />
+        <Field
+          label="Venmo username"
+          autoCapitalize="none"
+          value={venmoUsername}
+          onChangeText={setVenmoUsername}
+        />
+        <Field
+          label="Email"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+        />
+        <Field
+          label="Password"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
+        <Link href="/(auth)/login" style={{ marginTop: 20 }}>
+          <Text style={{ color: colors.muted }}>
+            Already have an account? <Text style={{ color: colors.accent }}>Log in</Text>
+          </Text>
+        </Link>
+      </View>
     </Screen>
   );
 }
