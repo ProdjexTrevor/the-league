@@ -58,7 +58,6 @@ export default async function BetPage({ searchParams }: Props) {
     const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
     if (p?.id) opponentMap.set(p.id, p);
   }
-  // Also allow any signed-up player (useful for team fills outside your leagues)
   for (const p of allProfiles ?? []) {
     if (p.id === user.id) continue;
     if (!opponentMap.has(p.id)) {
@@ -72,28 +71,37 @@ export default async function BetPage({ searchParams }: Props) {
   const catalogId = propCatalog?.id ?? "";
 
   return (
-    <AppShell userId={user.id} title="Make a bet">
-      <p className="mb-4 text-sm text-muted">
-        Lock it in with a friend. We keep the receipt.
+    <AppShell userId={user.id}>
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
+        No bookies · just friends
+      </p>
+      <h1 className="font-display text-4xl tracking-[0.04em] text-fg sm:text-5xl">
+        SET THE{" "}
+        <span className="text-accent">LINE</span>
+      </h1>
+      <p className="mt-2 max-w-sm text-sm text-muted">
+        Set the bet, set the line, shake on it. We keep the receipt.
       </p>
 
-      {catalogId ? (
-        <QuickBetForm
-          catalogId={catalogId}
-          opponents={opponents}
-          showHeading={false}
-          defaultAgainstId={against ?? ""}
-          currentUserId={user.id}
-        />
-      ) : (
-        <p className="text-sm text-muted">
-          Catalog isn’t ready. Use the{" "}
-          <Link href="/create" className="text-accent hover:underline">
-            full create flow
-          </Link>
-          .
-        </p>
-      )}
+      <div className="mt-6">
+        {catalogId ? (
+          <QuickBetForm
+            catalogId={catalogId}
+            opponents={opponents}
+            showHeading
+            defaultAgainstId={against ?? ""}
+            currentUserId={user.id}
+          />
+        ) : (
+          <p className="text-sm text-muted">
+            Catalog isn’t ready. Use the{" "}
+            <Link href="/create" className="text-accent hover:underline">
+              full create flow
+            </Link>
+            .
+          </p>
+        )}
+      </div>
 
       <p className="mt-8 text-center text-xs text-muted">
         Leagues or tournaments?{" "}
