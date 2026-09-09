@@ -9,6 +9,8 @@ import {
   setWagerLine,
   settleEvent,
 } from "@/app/actions";
+import { AcceptInviteButton } from "@/components/accept-invite-button";
+import { AppShell } from "@/components/app-shell";
 import { BetClaimPanel } from "@/components/bet-claim-panel";
 import { GolfClubDraftPanel } from "@/components/golf-club-draft-panel";
 import { createClient } from "@/lib/supabase/server";
@@ -79,6 +81,7 @@ export default async function EventPage({ params }: Props) {
 
   const scoringMode = (catalog?.scoring_mode ?? "placement") as ScoringMode;
   const playerIds = new Set(players?.map((p) => p.user_id));
+  const isBet = event.kind === "bet";
 
   type InviteOption = {
     user_id: string;
@@ -122,12 +125,19 @@ export default async function EventPage({ params }: Props) {
       (l) => l.side_label === myRow.side_label && Number(l.stake_units) > 0
     );
   const needsMyWagerOnAccept =
-    event.kind === "bet" &&
-    event.wager_mode === "custom" &&
-    !myPlayerLine &&
-    !myTeamLine;
+    isBet && event.wager_mode === "custom" && !myPlayerLine && !myTeamLine;
 
-  const isTeamBet = acceptedPlayers.some((p) => !!p.side_label);
+  /** Bets are locked once everyone invited has accepted. */
+  const betLocked =
+    isBet &&
+    event.status !== "completed" &&
+    pendingCount === 0 &&
+    acceptedPlayers.length >= 2;
+  /** Bets never show invite/wager edit chrome after creation. */
+  const canEditRoster = !isBet && event.status !== "completed";
+  const canEditWagers = !isBet && event.status !== "completed";
+
+  const isTeamBet = (players ?? []).some((p) => !!p.side_label);
   const claimOptions = isTeamBet
     ? [
         ...new Set(
@@ -173,35 +183,34 @@ export default async function EventPage({ params }: Props) {
   }
 
   const showWagerBoard =
-    event.wager_mode === "custom" || event.wager_mode === "odds";
+    event.wager_mode === "custom" ||
+    event.wager_mode === "odds" ||
+    (lines?.length ?? 0) > 0;
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-8 pb-20 sm:px-6 sm:py-10">
-      <Link
-        href={event.league_id ? `/leagues/${event.league_id}` : "/app"}
-        className="text-sm text-muted hover:text-fg"
-      >
+    <AppShell userId={user.id}>
+      <Link href={event.league_id ? `/leagues/${event.league_id}` : "/app"} className="text-sm text-muted hover:text-fg">
         ← Back
       </Link>
 
-      <header className="mt-6">
-        <p className="text-sm uppercase tracking-wider text-muted">
-          {eventKindLabel(event.kind)} · {catalog?.name ?? "Game"} ·{" "}
-          {event.status}
+      <header className="mt-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+          {eventKindLabel(event.kind)}
+          {catalog?.name ? ` · ${catalog.name}` : ""}
         </p>
-        <h1 className="mt-2 font-display break-words text-4xl text-fg sm:text-5xl">
+        <h1 className="mt-2 font-display break-words text-4xl tracking-[0.04em] text-fg sm:text-5xl">
           {event.title}
         </h1>
         <p className="mt-3 text-sm text-muted">
-          {scoringModeLabel(scoringMode)} · entry{" "}
-          {formatMoney(event.entry_fee_units)} money · wager{" "}
-          {wagerModeLabel(event.wager_mode)}
+          {isBet
+            ? wagerModeLabel(event.wager_mode)
+            : `${scoringModeLabel(scoringMode)} · entry ${formatMoney(event.entry_fee_units)} · ${wagerModeLabel(event.wager_mode)}`}
           {event.wager_mode === "pot" &&
-            ` · stake ${formatMoney(event.default_stake_units)} money`}
+            ` · stake ${formatMoney(event.default_stake_units)}`}
         </p>
         {event.notes && (
           <p className="mt-3 break-words text-base text-fg">
-            {event.kind === "bet" ? (
+            {isBet ? (
               <>
                 <span className="text-sm text-muted">Terms · </span>
                 {event.notes}
@@ -217,16 +226,72 @@ export default async function EventPage({ params }: Props) {
             {event.bracket_size ? ` · bracket ${event.bracket_size}` : ""}
           </p>
         )}
-        {pendingCount > 0 && event.status !== "completed" && (
-          <p className="mt-3 text-sm text-accent">
+
+        {betLocked ? (
+          <p className="mt-4 inline-flex rounded-full border border-accent/35 bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-accent">
+            Locked in
+          </p>
+        ) : pendingCount > 0 && event.status !== "completed" ? (
+          <p className="mt-4 text-sm text-accent">
             {pendingCount} invite{pendingCount === 1 ? "" : "s"} waiting to
             accept
           </p>
-        )}
+        ) : null}
       </header>
 
+      {myInviteStatus === "pending" && event.status !== "completed" && (
+        <section className="mt-6 rounded-2xl border border-accent/40 bg-accent/10 p-4">
+          <h2 className="text-lg font-semibold">You&apos;re invited</h2>
+          <p className="mt-1 text-sm text-muted">
+            {needsMyWagerOnAccept
+              ? "Enter your stake and accept to lock this bet in."
+              : "Stakes are set — accept to lock it in."}
+          </p>
+          {needsMyWagerOnAccept ? (
+            <form
+              action={acceptAction}
+              className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"
+            >
+              <label className="block min-w-0 flex-1">
+                <span className="mb-1.5 block text-sm text-muted">
+                  Your wager
+                </span>
+                <input
+                  name="wager_units"
+                  type="number"
+                  min={0}
+                  step="any"
+                  required
+                  defaultValue={10}
+                  className="w-full rounded-2xl border border-line bg-bg px-4 py-3 text-sm outline-none focus:border-accent"
+                />
+              </label>
+              <button
+                type="submit"
+                className="rounded-2xl bg-accent px-4 py-3 text-sm font-bold uppercase tracking-wider text-accent-ink hover:brightness-110"
+              >
+                Accept & lock in
+              </button>
+            </form>
+          ) : (
+            <div className="mt-4">
+              <AcceptInviteButton eventId={id} />
+            </div>
+          )}
+          <form action={declineAction} className="mt-3">
+            <button
+              type="submit"
+              className="text-sm text-muted underline-offset-2 hover:text-danger hover:underline"
+            >
+              Decline
+            </button>
+          </form>
+        </section>
+      )}
+
       {event.mini_game === "golf_club_draft" &&
-        isGolfClubDraft(event.mini_game_state) && (
+        isGolfClubDraft(event.mini_game_state) &&
+        (betLocked || !isBet) && (
           <GolfClubDraftPanel
             eventId={id}
             state={normalizeGolfClubDraft(event.mini_game_state)!}
@@ -239,76 +304,52 @@ export default async function EventPage({ params }: Props) {
           />
         )}
 
-      {myInviteStatus === "pending" && event.status !== "completed" && (
-        <section className="mt-10 rounded-sm border border-accent/40 bg-accent/5 p-4">
-          <h2 className="text-lg font-semibold">You&apos;re invited</h2>
-          <p className="mt-1 text-sm text-muted">
-            Accept to join this {eventKindLabel(event.kind).toLowerCase()}.
-            {needsMyWagerOnAccept
-              ? " Enter how much money you are putting up."
-              : " Stakes are already set — just accept to lock it in."}
-          </p>
-          <form action={acceptAction} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-            {needsMyWagerOnAccept && (
-              <label className="block min-w-0 flex-1">
-                <span className="mb-1.5 block text-sm text-muted">
-                  Your wager (money)
-                </span>
-                <input
-                  name="wager_units"
-                  type="number"
-                  min={0}
-                  step="any"
-                  required
-                  defaultValue={10}
-                  className="w-full rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
-                />
-              </label>
-            )}
-            <button
-              type="submit"
-              className="rounded-sm bg-accent px-4 py-2.5 text-sm font-semibold text-accent-ink hover:brightness-110"
-            >
-              Accept
-            </button>
-          </form>
-          <form action={declineAction} className="mt-3">
-            <button
-              type="submit"
-              className="text-sm text-muted underline-offset-2 hover:text-danger hover:underline"
-            >
-              Decline invite
-            </button>
-          </form>
-        </section>
-      )}
-
-      <section className="mt-12">
-        <h2 className="text-lg font-semibold">Players</h2>
-        <ul className="mt-4 divide-y divide-line border-y border-line">
+      <section className="mt-8">
+        <h2 className="text-base font-semibold">Players</h2>
+        <ul className="mt-3 space-y-2">
           {players?.map((p) => {
             const status = p.invite_status ?? "accepted";
+            const stakeLine = lines?.find(
+              (l) =>
+                l.player_id === p.user_id ||
+                (p.side_label && l.side_label === p.side_label)
+            );
             return (
               <li
                 key={p.user_id}
-                className="flex flex-col gap-1 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-line bg-bg-elevated/60 px-4 py-3 text-sm"
               >
-                <span className="min-w-0 break-words">
+                <span className="min-w-0">
                   <Link
                     href={`/players/${p.user_id}`}
-                    className="hover:text-accent"
+                    className="font-medium hover:text-accent"
                   >
                     {nameById.get(p.user_id)}
                   </Link>
-                  {p.side_label ? ` (${p.side_label})` : ""}
+                  {p.side_label ? (
+                    <span className="text-muted"> · {p.side_label}</span>
+                  ) : null}
+                  {isBet && stakeLine ? (
+                    <span className="mt-0.5 block text-xs text-muted">
+                      Stake {formatMoney(stakeLine.stake_units)}
+                    </span>
+                  ) : null}
                 </span>
-                <span className="shrink-0 text-muted">
+                <span
+                  className={`shrink-0 text-xs font-semibold uppercase tracking-wider ${
+                    status === "pending"
+                      ? "text-accent"
+                      : status === "declined"
+                        ? "text-danger"
+                        : "text-muted"
+                  }`}
+                >
                   {event.status === "completed"
                     ? [
                         p.placement ? `#${p.placement}` : null,
                         p.score != null ? `score ${p.score}` : null,
                         p.outcome,
-                        `${Number(p.units_delta) >= 0 ? "+" : ""}${formatMoney(p.units_delta)} money`,
+                        `${Number(p.units_delta) >= 0 ? "+" : ""}${formatMoney(p.units_delta)}`,
                       ]
                         .filter(Boolean)
                         .join(" · ")
@@ -324,9 +365,9 @@ export default async function EventPage({ params }: Props) {
         </ul>
       </section>
 
-      {event.status !== "completed" && (
-        <section className="mt-10">
-          <h2 className="text-lg font-semibold">Invite player</h2>
+      {canEditRoster && (
+        <section className="mt-8">
+          <h2 className="text-base font-semibold">Invite player</h2>
           {available.length > 0 ? (
             <form
               action={addPlayerAction}
@@ -336,7 +377,7 @@ export default async function EventPage({ params }: Props) {
                 name="user_id"
                 required
                 defaultValue=""
-                className="w-full min-w-0 rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:w-auto sm:min-w-[12rem]"
+                className="w-full min-w-0 rounded-2xl border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:w-auto sm:min-w-[12rem]"
               >
                 <option value="" disabled>
                   Select player
@@ -350,11 +391,11 @@ export default async function EventPage({ params }: Props) {
               <input
                 name="side_label"
                 placeholder="Side label (optional)"
-                className="w-full min-w-0 rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:w-auto sm:min-w-[12rem]"
+                className="w-full min-w-0 rounded-2xl border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:w-auto sm:min-w-[12rem]"
               />
               <button
                 type="submit"
-                className="rounded-sm border border-line px-4 py-2.5 text-sm hover:border-fg/40 sm:w-auto"
+                className="rounded-2xl border border-line px-4 py-2.5 text-sm hover:border-fg/40 sm:w-auto"
               >
                 Send invite
               </button>
@@ -369,29 +410,31 @@ export default async function EventPage({ params }: Props) {
         </section>
       )}
 
-      {(showWagerBoard || event.status !== "completed") && (
-        <section className="mt-10">
-          <h2 className="text-lg font-semibold">
-            {event.wager_mode === "custom"
-              ? "Custom wagers"
-              : event.wager_mode === "odds"
-                ? "Odds board"
-                : "Wagers & odds"}
+      {showWagerBoard && (
+        <section className="mt-8">
+          <h2 className="text-base font-semibold">
+            {isBet
+              ? "Stakes"
+              : event.wager_mode === "custom"
+                ? "Custom wagers"
+                : event.wager_mode === "odds"
+                  ? "Odds board"
+                  : "Wagers & odds"}
           </h2>
-          <p className="mt-1 text-sm text-muted">
-            {event.wager_mode === "custom"
-              ? event.kind === "bet"
-                ? "Each side enters their own stake. Losers forfeit; winners take that pot."
-                : "Each player or team puts up the money shown. Losers forfeit; winners split that pot."
-              : event.wager_mode === "odds"
-                ? `Fractional odds. Example: ${formatOdds(2, 1)} on stake ${formatMoney(event.default_stake_units)} means the other side puts up ${liability(Number(event.default_stake_units) || 0, 2, 1).toFixed(0)} if that line wins (full return ${payout(Number(event.default_stake_units) || 0, 2, 1).toFixed(0)}).`
-                : "Add stake lines or fractional odds for this game. Equal-pot games settle from the shared stake; custom lines override."}
-          </p>
-          <ul className="mt-4 divide-y divide-line border-y border-line">
+          {!isBet && (
+            <p className="mt-1 text-sm text-muted">
+              {event.wager_mode === "custom"
+                ? "Each player or team puts up the money shown. Losers forfeit; winners split that pot."
+                : event.wager_mode === "odds"
+                  ? `Fractional odds. Example: ${formatOdds(2, 1)} on stake ${formatMoney(event.default_stake_units)} means the other side puts up ${liability(Number(event.default_stake_units) || 0, 2, 1).toFixed(0)} if that line wins (full return ${payout(Number(event.default_stake_units) || 0, 2, 1).toFixed(0)}).`
+                  : "Add stake lines or fractional odds for this game."}
+            </p>
+          )}
+          <ul className="mt-3 space-y-2">
             {lines?.map((line) => (
               <li
                 key={line.id}
-                className="flex flex-col gap-2 py-3 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3"
+                className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-bg-elevated/60 px-4 py-3 text-sm"
               >
                 <span className="min-w-0 break-words">
                   {line.player_id
@@ -400,31 +443,19 @@ export default async function EventPage({ params }: Props) {
                   {event.wager_mode === "custom" &&
                   line.odds_num === 1 &&
                   line.odds_den === 1 ? (
-                    <span className="text-accent">
-                      {formatMoney(line.stake_units)} money
+                    <span className="font-semibold text-accent">
+                      {formatMoney(line.stake_units)}
                     </span>
                   ) : (
                     <>
                       <span className="text-accent">
                         {formatOdds(line.odds_num, line.odds_den)}
                       </span>{" "}
-                      · stake {formatMoney(line.stake_units)} money
-                      {Number(line.stake_units) > 0 &&
-                        (line.odds_num !== 1 || line.odds_den !== 1) && (
-                          <span className="text-muted">
-                            {" "}
-                            · opposite puts up{" "}
-                            {liability(
-                              Number(line.stake_units),
-                              line.odds_num,
-                              line.odds_den
-                            ).toFixed(0)}
-                          </span>
-                        )}
+                      · stake {formatMoney(line.stake_units)}
                     </>
                   )}
                 </span>
-                {event.status !== "completed" && (
+                {canEditWagers && (
                   <form action={deleteLineAction} className="shrink-0">
                     <input type="hidden" name="line_id" value={line.id} />
                     <button
@@ -438,10 +469,12 @@ export default async function EventPage({ params }: Props) {
               </li>
             ))}
             {(lines?.length ?? 0) === 0 && (
-              <li className="py-3 text-sm text-muted">No wagers yet.</li>
+              <li className="rounded-2xl border border-dashed border-line px-4 py-3 text-sm text-muted">
+                No stakes yet.
+              </li>
             )}
           </ul>
-          {event.status !== "completed" && acceptedPlayers.length > 0 && (
+          {canEditWagers && acceptedPlayers.length > 0 && (
             <form
               action={setLineAction}
               className="mt-4 grid gap-3 sm:grid-cols-4"
@@ -449,7 +482,7 @@ export default async function EventPage({ params }: Props) {
               <select
                 name="player_id"
                 defaultValue=""
-                className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:col-span-2"
+                className="rounded-2xl border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:col-span-2"
               >
                 <option value="">Player (or use side below)</option>
                 {acceptedPlayers.map((p) => (
@@ -461,7 +494,7 @@ export default async function EventPage({ params }: Props) {
               <input
                 name="side_label"
                 placeholder="Team / side label"
-                className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:col-span-2"
+                className="rounded-2xl border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:col-span-2"
               />
               <input
                 name="odds_num"
@@ -469,7 +502,7 @@ export default async function EventPage({ params }: Props) {
                 min={1}
                 defaultValue={event.wager_mode === "odds" ? 2 : 1}
                 placeholder="Odds num"
-                className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
+                className="rounded-2xl border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
               />
               <input
                 name="odds_den"
@@ -477,7 +510,7 @@ export default async function EventPage({ params }: Props) {
                 min={1}
                 defaultValue={1}
                 placeholder="Odds den"
-                className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
+                className="rounded-2xl border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent"
               />
               <input
                 name="stake_units"
@@ -487,11 +520,11 @@ export default async function EventPage({ params }: Props) {
                 required
                 defaultValue={event.default_stake_units || 10}
                 placeholder="Money"
-                className="rounded-sm border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:col-span-2"
+                className="rounded-2xl border border-line bg-bg-elevated px-3 py-2.5 text-sm outline-none focus:border-accent sm:col-span-2"
               />
               <button
                 type="submit"
-                className="rounded-sm border border-line px-4 py-2.5 text-sm hover:border-fg/40 sm:col-span-2"
+                className="rounded-2xl border border-line px-4 py-2.5 text-sm hover:border-fg/40 sm:col-span-2"
               >
                 Add wager / odds
               </button>
@@ -501,9 +534,8 @@ export default async function EventPage({ params }: Props) {
       )}
 
       {event.status !== "completed" &&
-        event.kind === "bet" &&
-        acceptedPlayers.length >= 2 &&
-        pendingCount === 0 &&
+        isBet &&
+        betLocked &&
         myInviteStatus === "accepted" && (
           <BetClaimPanel
             eventId={id}
@@ -515,11 +547,11 @@ export default async function EventPage({ params }: Props) {
         )}
 
       {event.status !== "completed" &&
-        event.kind !== "bet" &&
+        !isBet &&
         acceptedPlayers.length >= 1 &&
         myInviteStatus !== "pending" && (
-          <section className="mt-10">
-            <h2 className="text-lg font-semibold">Settle results</h2>
+          <section className="mt-8">
+            <h2 className="text-base font-semibold">Settle results</h2>
             <p className="mt-1 text-sm text-muted">
               Enter results for {scoringModeLabel(scoringMode)}.
               {pendingCount > 0
@@ -542,7 +574,7 @@ export default async function EventPage({ params }: Props) {
                         step="any"
                         required
                         placeholder="Score"
-                        className="w-24 rounded-sm border border-line bg-bg-elevated px-3 py-2 outline-none focus:border-accent"
+                        className="w-24 rounded-2xl border border-line bg-bg-elevated px-3 py-2 outline-none focus:border-accent"
                       />
                     )}
                     {(scoringMode === "placement" ||
@@ -553,7 +585,7 @@ export default async function EventPage({ params }: Props) {
                         min={1}
                         required
                         placeholder="#"
-                        className="w-20 rounded-sm border border-line bg-bg-elevated px-3 py-2 outline-none focus:border-accent"
+                        className="w-20 rounded-2xl border border-line bg-bg-elevated px-3 py-2 outline-none focus:border-accent"
                       />
                     )}
                     {scoringMode === "head_to_head" && (
@@ -561,7 +593,7 @@ export default async function EventPage({ params }: Props) {
                         name={`outcome_${p.user_id}`}
                         required
                         defaultValue=""
-                        className="rounded-sm border border-line bg-bg-elevated px-3 py-2 outline-none focus:border-accent"
+                        className="rounded-2xl border border-line bg-bg-elevated px-3 py-2 outline-none focus:border-accent"
                       >
                         <option value="" disabled>
                           Result
@@ -576,13 +608,13 @@ export default async function EventPage({ params }: Props) {
               ))}
               <button
                 type="submit"
-                className="mt-2 rounded-sm bg-accent px-4 py-2.5 text-sm font-semibold text-accent-ink hover:brightness-110"
+                className="mt-2 rounded-2xl bg-accent px-4 py-2.5 text-sm font-semibold text-accent-ink hover:brightness-110"
               >
                 Complete & settle
               </button>
             </form>
           </section>
         )}
-    </main>
+    </AppShell>
   );
 }

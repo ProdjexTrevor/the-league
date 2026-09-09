@@ -45,26 +45,36 @@ export default function HomeScreen() {
     if (!user) return;
     setLoading(true);
 
-    const [{ data: profile }, { data: memberships }, { data: myEvents }, { data: playing }] =
-      await Promise.all([
-        supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
-        supabase
-          .from("league_members")
-          .select("role, leagues(id, name, description, invite_code)")
-          .eq("user_id", user.id)
-          .order("joined_at", { ascending: false }),
-        supabase
-          .from("events")
-          .select("id, title, kind, status, created_at")
-          .eq("created_by", user.id)
-          .order("created_at", { ascending: false })
-          .limit(40),
-        supabase
-          .from("event_players")
-          .select("invite_status, events(id, title, kind, status, created_at)")
-          .eq("user_id", user.id)
-          .limit(50),
-      ]);
+    const [
+      { data: profile },
+      { data: memberships },
+      { data: myEvents },
+      { data: playing },
+      { data: pendingRows },
+    ] = await Promise.all([
+      supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+      supabase
+        .from("league_members")
+        .select("role, leagues(id, name, description, invite_code)")
+        .eq("user_id", user.id)
+        .order("joined_at", { ascending: false }),
+      supabase
+        .from("events")
+        .select("id, title, kind, status, created_at")
+        .eq("created_by", user.id)
+        .order("created_at", { ascending: false })
+        .limit(40),
+      supabase
+        .from("event_players")
+        .select("invite_status, events(id, title, kind, status, created_at)")
+        .eq("user_id", user.id)
+        .limit(50),
+      supabase
+        .from("event_players")
+        .select("event_id")
+        .eq("user_id", user.id)
+        .eq("invite_status", "pending"),
+    ]);
 
     setDisplayName(profile?.display_name ?? "player");
 
@@ -77,17 +87,29 @@ export default function HomeScreen() {
       .filter(Boolean) as LeagueRow[];
     setLeagues(leagueList);
 
+    const pendingEventIds = (pendingRows ?? []).map(
+      (row: { event_id: string }) => row.event_id
+    );
+    let pendingList: EventRow[] = [];
+    if (pendingEventIds.length > 0) {
+      const { data: pendingEvents } = await supabase
+        .from("events")
+        .select("id, title, kind, status, created_at")
+        .in("id", pendingEventIds)
+        .order("created_at", { ascending: false });
+      pendingList = (pendingEvents ?? []) as EventRow[];
+    }
+
     const eventMap = new Map<string, EventRow>();
     (myEvents ?? []).forEach((e) => eventMap.set(e.id, e as EventRow));
-    const pendingList: EventRow[] = [];
     (playing ?? []).forEach(
       (row: { invite_status: string; events: EventRow | EventRow[] | null }) => {
         const e = Array.isArray(row.events) ? row.events[0] : row.events;
         if (!e) return;
-        if (row.invite_status === "pending") pendingList.push(e);
         eventMap.set(e.id, e);
       }
     );
+    pendingList.forEach((e) => eventMap.set(e.id, e));
     setPending(pendingList);
     setEvents(
       Array.from(eventMap.values()).sort(
@@ -142,13 +164,13 @@ export default function HomeScreen() {
         <>
           {pending.length > 0 ? (
             <>
-              <SectionLabel>Invites</SectionLabel>
+              <SectionLabel>New bets</SectionLabel>
               {pending.map((event) => (
                 <ActionTile
                   key={event.id}
                   title={event.title}
-                  subtitle={`${eventKindLabel(event.kind)} · needs you`}
-                  meta="Open"
+                  subtitle={`${eventKindLabel(event.kind)} · tap to accept`}
+                  meta="Accept"
                   onPress={() => router.push(`/event/${event.id}`)}
                 />
               ))}

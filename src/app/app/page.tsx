@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
 import { BrandPill } from "@/components/brand";
+import { NewBetsPanel, type NewBetInvite } from "@/components/new-bets-panel";
 import { TheBook } from "@/components/the-book";
 import { createClient } from "@/lib/supabase/server";
 import { venmoPayUrl } from "@/lib/venmo";
@@ -32,42 +32,163 @@ export default async function AppPage() {
     .eq("id", user.id)
     .single();
 
-  const [{ data: myEvents }, { data: owedRows }, { data: dueRows }] =
-    await Promise.all([
-      supabase
-        .from("events")
-        .select(
-          "id, title, kind, status, entry_fee_units, default_stake_units, wager_mode, notes, created_at, league_id"
-        )
-        .eq("created_by", user.id)
-        .order("created_at", { ascending: false })
-        .limit(40),
-      supabase
-        .from("wallet_obligations")
-        .select("id, to_user_id, amount, events(title)")
-        .eq("from_user_id", user.id)
-        .eq("status", "open"),
-      supabase
-        .from("wallet_obligations")
-        .select("id, from_user_id, amount, events(title)")
-        .eq("to_user_id", user.id)
-        .eq("status", "open"),
-    ]);
+  const [
+    { data: myEvents },
+    { data: owedRows },
+    { data: dueRows },
+    { data: pendingRows },
+    { data: playing },
+  ] = await Promise.all([
+    supabase
+      .from("events")
+      .select(
+        "id, title, kind, status, entry_fee_units, default_stake_units, wager_mode, notes, created_at, league_id"
+      )
+      .eq("created_by", user.id)
+      .order("created_at", { ascending: false })
+      .limit(40),
+    supabase
+      .from("wallet_obligations")
+      .select("id, to_user_id, amount, events(title)")
+      .eq("from_user_id", user.id)
+      .eq("status", "open"),
+    supabase
+      .from("wallet_obligations")
+      .select("id, from_user_id, amount, events(title)")
+      .eq("to_user_id", user.id)
+      .eq("status", "open"),
+    supabase
+      .from("event_players")
+      .select("event_id")
+      .eq("user_id", user.id)
+      .eq("invite_status", "pending"),
+    supabase
+      .from("event_players")
+      .select(
+        "event_id, invite_status, events(id, title, kind, status, entry_fee_units, default_stake_units, wager_mode, notes, created_at, league_id)"
+      )
+      .eq("user_id", user.id)
+      .limit(50),
+  ]);
 
-  const { data: playing } = await supabase
-    .from("event_players")
-    .select(
-      "event_id, invite_status, events(id, title, kind, status, entry_fee_units, default_stake_units, wager_mode, notes, created_at, league_id)"
-    )
-    .eq("user_id", user.id)
-    .limit(50);
+  const pendingEventIds = pendingRows?.map((row) => row.event_id) ?? [];
+  type PendingEventRow = {
+    id: string;
+    title: string;
+    kind: string;
+    status: string;
+    entry_fee_units: number;
+    default_stake_units: number;
+    wager_mode: string;
+    notes: string | null;
+    created_at: string;
+    league_id: string | null;
+    created_by: string;
+  };
+  const { data: pendingEvents } =
+    pendingEventIds.length > 0
+      ? await supabase
+          .from("events")
+          .select(
+            "id, title, kind, status, entry_fee_units, default_stake_units, wager_mode, notes, created_at, league_id, created_by"
+          )
+          .in("id", pendingEventIds)
+          .order("created_at", { ascending: false })
+      : { data: [] as PendingEventRow[] };
 
-  const eventMap = new Map<string, NonNullable<(typeof myEvents)>[number]>();
-  myEvents?.forEach((e) => eventMap.set(e.id, e));
+  const creatorIds = [
+    ...new Set(
+      (pendingEvents ?? [])
+        .map((event) => event.created_by)
+        .filter(Boolean) as string[]
+    ),
+  ];
+  const { data: creators } =
+    creatorIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, display_name")
+          .in("id", creatorIds)
+      : { data: [] };
+  const creatorById = new Map(creators?.map((p) => [p.id, p.display_name]) ?? []);
+
+  const { data: myStakes } =
+    pendingEventIds.length > 0
+      ? await supabase
+          .from("wager_lines")
+          .select("event_id, stake_units")
+          .in("event_id", pendingEventIds)
+          .eq("player_id", user.id)
+      : { data: [] };
+  const myStakeByEvent = new Map(
+    myStakes?.map((line) => [line.event_id, Number(line.stake_units)]) ?? []
+  );
+
+  const newBets: NewBetInvite[] = (pendingEvents ?? []).map((event) => ({
+    id: event.id,
+    title: event.title,
+    kind: event.kind,
+    notes: event.notes,
+    default_stake_units: event.default_stake_units,
+    entry_fee_units: event.entry_fee_units,
+    created_at: event.created_at,
+    creatorName: creatorById.get(event.created_by) ?? "Someone",
+    myStake: myStakeByEvent.get(event.id) ?? 0,
+  }));
+
+  const eventMap = new Map<
+    string,
+    NonNullable<(typeof myEvents)>[number] & {
+      myInviteStatus?: string | null;
+      waitingOnOthers?: boolean;
+    }
+  >();
+  myEvents?.forEach((e) => eventMap.set(e.id, { ...e, myInviteStatus: "accepted" }));
   playing?.forEach((row) => {
     const e = Array.isArray(row.events) ? row.events[0] : row.events;
-    if (e) eventMap.set(e.id, e);
+    if (e) {
+      eventMap.set(e.id, {
+        ...e,
+        myInviteStatus: row.invite_status,
+      });
+    }
   });
+  // Prefer pending event fetch (more reliable nested join), mark invites
+  for (const event of pendingEvents ?? []) {
+    eventMap.set(event.id, {
+      id: event.id,
+      title: event.title,
+      kind: event.kind,
+      status: event.status,
+      entry_fee_units: event.entry_fee_units,
+      default_stake_units: event.default_stake_units,
+      wager_mode: event.wager_mode,
+      notes: event.notes,
+      created_at: event.created_at,
+      league_id: event.league_id,
+      myInviteStatus: "pending",
+    });
+  }
+
+  // Mark events I created/accepted that still have pending invitees
+  const openEventIds = [...eventMap.values()]
+    .filter((e) => e.status === "open" || e.status === "in_progress")
+    .map((e) => e.id);
+  if (openEventIds.length > 0) {
+    const { data: pendingOthers } = await supabase
+      .from("event_players")
+      .select("event_id")
+      .in("event_id", openEventIds)
+      .eq("invite_status", "pending");
+    const waitingIds = new Set(pendingOthers?.map((r) => r.event_id) ?? []);
+    for (const id of waitingIds) {
+      const existing = eventMap.get(id);
+      if (existing && existing.myInviteStatus !== "pending") {
+        eventMap.set(id, { ...existing, waitingOnOthers: true });
+      }
+    }
+  }
+
   const events = Array.from(eventMap.values()).sort(
     (a, b) => +new Date(b.created_at) - +new Date(a.created_at)
   );
@@ -111,15 +232,6 @@ export default async function AppPage() {
       : { data: [] };
   const personById = new Map(people?.map((p) => [p.id, p]) ?? []);
 
-  const pendingInvites =
-    playing
-      ?.filter((row) => row.invite_status === "pending")
-      .map((row) => {
-        const e = Array.isArray(row.events) ? row.events[0] : row.events;
-        return e;
-      })
-      .filter(Boolean) ?? [];
-
   return (
     <AppShell userId={user.id}>
       <div className="animate-rise">
@@ -128,6 +240,8 @@ export default async function AppPage() {
           Hey {profile?.display_name ?? "player"}
         </p>
       </div>
+
+      <NewBetsPanel bets={newBets} />
 
       <section className="net-card animate-rise-delay mt-5 rounded-2xl bg-bg-elevated/80 px-4 py-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
@@ -146,29 +260,6 @@ export default async function AppPage() {
             : "No live stakes"}
         </p>
       </section>
-
-      {pendingInvites.length > 0 ? (
-        <section className="mt-6">
-          <h2 className="text-base font-semibold">Invites</h2>
-          <ul className="mt-2 space-y-2">
-            {pendingInvites.map((event) =>
-              event ? (
-                <li key={event.id}>
-                  <Link
-                    href={`/events/${event.id}`}
-                    className="flex min-h-12 items-center justify-between rounded-2xl border border-accent/30 bg-accent/10 px-4 py-3"
-                  >
-                    <span className="font-medium">{event.title}</span>
-                    <span className="text-xs uppercase tracking-wider text-accent">
-                      Accept
-                    </span>
-                  </Link>
-                </li>
-              ) : null
-            )}
-          </ul>
-        </section>
-      ) : null}
 
       <section className="mt-6 space-y-5">
         <div>

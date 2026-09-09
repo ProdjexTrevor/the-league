@@ -991,11 +991,17 @@ export async function addPlayerToEvent(eventId: string, formData: FormData) {
   const supabase = await createClient();
   const { data: event } = await supabase
     .from("events")
-    .select("entry_fee_units, league_id")
+    .select("entry_fee_units, league_id, kind, status")
     .eq("id", eventId)
     .single();
 
   if (!event) fail("Event not found.");
+  if (event.status === "completed" || event.status === "cancelled") {
+    fail("This event is closed.");
+  }
+  if (event.kind === "bet") {
+    fail("This bet is already set — invites can’t be changed.");
+  }
 
   const { error } = await supabase.from("event_players").insert({
     event_id: eventId,
@@ -1031,6 +1037,19 @@ export async function setWagerLine(eventId: string, formData: FormData) {
   }
 
   const supabase = await createClient();
+  const { data: event } = await supabase
+    .from("events")
+    .select("kind, status")
+    .eq("id", eventId)
+    .single();
+  if (!event) fail("Event not found.");
+  if (event.status === "completed" || event.status === "cancelled") {
+    fail("This event is closed.");
+  }
+  if (event.kind === "bet") {
+    fail("Stakes are locked on this bet.");
+  }
+
   const { error } = await supabase.from("wager_lines").insert({
     event_id: eventId,
     player_id: playerId,
@@ -1049,6 +1068,19 @@ export async function deleteWagerLine(eventId: string, formData: FormData) {
   if (!lineId) fail("Missing line.");
 
   const supabase = await createClient();
+  const { data: event } = await supabase
+    .from("events")
+    .select("kind, status")
+    .eq("id", eventId)
+    .single();
+  if (!event) fail("Event not found.");
+  if (event.status === "completed" || event.status === "cancelled") {
+    fail("This event is closed.");
+  }
+  if (event.kind === "bet") {
+    fail("Stakes are locked on this bet.");
+  }
+
   const { error } = await supabase.from("wager_lines").delete().eq("id", lineId);
   if (error) fail(error.message);
   revalidatePath(`/events/${eventId}`);
