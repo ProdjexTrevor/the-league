@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/pro-game-recon",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 13 * * *"
     }
   ]
 }
