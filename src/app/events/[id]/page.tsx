@@ -274,8 +274,12 @@ export default async function EventPage({ params }: Props) {
               </p>
             ) : pick.side ? (
               <p className="mt-1 text-muted">
-                Nightly recon will grade this from ESPN once the game is final
-                and both sides have accepted.
+                Auto-settle starts ~3 hours after kickoff, then checks ESPN
+                every 15 minutes until the game is final
+                {pick.startIso
+                  ? ` (kickoff ${new Date(pick.startIso).toLocaleString()})`
+                  : ""}
+                .
               </p>
             ) : (
               <p className="mt-1 text-muted">
@@ -591,8 +595,8 @@ export default async function EventPage({ params }: Props) {
           if (pick?.side && !pick.graded) {
             return (
               <p className="mt-8 rounded-2xl border border-line bg-bg-elevated/60 px-4 py-3 text-sm text-muted">
-                Waiting on the nightly ESPN recon to grade and settle this
-                pick. You can still refresh later — no manual claim needed.
+                Waiting on ESPN recon (starts ~3h after kickoff, every 15
+                min). No manual claim needed once both sides have accepted.
               </p>
             );
           }

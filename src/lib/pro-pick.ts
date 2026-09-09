@@ -15,6 +15,8 @@ export type ProPick = {
   awayAbbr: string;
   marketLabel: string;
   pickerUserId: string;
+  /** ISO kickoff — recon starts after sport-specific delay. */
+  startIso?: string | null;
   graded?: boolean;
   result?: "win" | "loss" | "push" | "ungradable";
   finalHome?: number;
@@ -22,6 +24,39 @@ export type ProPick = {
   gradedAt?: string;
   note?: string;
 };
+
+/** Hours after kickoff before we start polling ESPN for a final. */
+export function reconDelayHours(sport: string): number {
+  switch (sport) {
+    case "nfl":
+    case "ncaaf":
+      return 3;
+    case "nba":
+    case "ncaab":
+      return 2.5;
+    case "mlb":
+      return 3;
+    case "nhl":
+      return 2.5;
+    default:
+      return 3;
+  }
+}
+
+/** True when we're in the post-game window and should hit ESPN. */
+export function isInReconWindow(
+  pick: ProPick,
+  now = new Date()
+): boolean {
+  if (!pick.startIso) {
+    // Legacy picks without kickoff — allow recon (hourly / every tick).
+    return true;
+  }
+  const start = new Date(pick.startIso);
+  if (Number.isNaN(+start)) return true;
+  const delayMs = reconDelayHours(pick.sport) * 60 * 60 * 1000;
+  return now.getTime() >= start.getTime() + delayMs;
+}
 
 export function normalizeProPick(raw: unknown): ProPick | null {
   if (!raw || typeof raw !== "object") return null;
@@ -46,6 +81,7 @@ export function normalizeProPick(raw: unknown): ProPick | null {
     awayAbbr: String(o.awayAbbr ?? "AWAY"),
     marketLabel: String(o.marketLabel ?? ""),
     pickerUserId: o.pickerUserId,
+    startIso: typeof o.startIso === "string" ? o.startIso : null,
     graded: Boolean(o.graded),
     result: o.result as ProPick["result"],
     finalHome: o.finalHome == null ? undefined : Number(o.finalHome),

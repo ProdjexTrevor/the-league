@@ -49,6 +49,8 @@ export type ProGame = {
   name: string;
   shortName: string;
   start: string | null;
+  /** ISO kickoff/start from ESPN (for recon timing). */
+  startIso: string | null;
   status: string;
   away: string;
   home: string;
@@ -326,6 +328,7 @@ export async function fetchProGames(sport: ProSport): Promise<ProGame[]> {
       name: event.name ?? `${awayName} at ${homeName}`,
       shortName: event.shortName ?? `${awayAbbr} @ ${homeAbbr}`,
       start: fmtTime(comp?.date ?? event.date),
+      startIso: comp?.date ?? event.date ?? null,
       status:
         event.status?.type?.shortDetail ??
         event.status?.type?.description ??

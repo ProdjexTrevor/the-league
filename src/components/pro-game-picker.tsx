@@ -23,6 +23,7 @@ type Props = {
       homeAbbr: string;
       awayAbbr: string;
       marketLabel: string;
+      startIso: string | null;
     };
   }) => void;
 };
@@ -80,6 +81,7 @@ export function ProGamePicker({ onPick }: Props) {
         homeAbbr: game.homeAbbr,
         awayAbbr: game.awayAbbr,
         marketLabel: market.label,
+        startIso: game.startIso,
       },
     });
   }
@@ -100,6 +102,7 @@ export function ProGamePicker({ onPick }: Props) {
         homeAbbr: game.homeAbbr,
         awayAbbr: game.awayAbbr,
         marketLabel: "Game only",
+        startIso: game.startIso,
       },
     });
   }
@@ -108,8 +111,8 @@ export function ProGamePicker({ onPick }: Props) {
     <div className="rounded-2xl border border-accent/30 bg-accent/5 p-3">
       <p className={labelCls}>Today&apos;s pro games</p>
       <p className="mt-1 text-xs text-muted">
-        Pick a game and a line. Once both sides accept, we recon ESPN finals
-        overnight and settle win/loss automatically.
+        Pick a game and a line. After kickoff (~3 hours for football), we poll
+        ESPN every 15 minutes and settle as soon as it&apos;s final.
       </p>
 
       <div className="mt-3 flex flex-wrap gap-1.5">

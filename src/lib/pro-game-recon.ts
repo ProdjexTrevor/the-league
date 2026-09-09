@@ -4,7 +4,9 @@ import type { Database } from "@/lib/database.types";
 import { fetchProGameFinal, type ProSport } from "@/lib/pro-games";
 import {
   gradeProPick,
+  isInReconWindow,
   normalizeProPick,
+  reconDelayHours,
   type ProPick,
 } from "@/lib/pro-pick";
 
@@ -12,10 +14,12 @@ type Admin = SupabaseClient<Database>;
 
 export type ReconSummary = {
   scanned: number;
+  due: number;
   graded: number;
   settled: number;
   pushed: number;
   skipped: number;
+  tooEarly: number;
   errors: string[];
   details: Array<{
     eventId: string;
@@ -126,19 +130,22 @@ async function settleCustomTwoPlayer(
 export async function runProGameRecon(admin: Admin): Promise<ReconSummary> {
   const summary: ReconSummary = {
     scanned: 0,
+    due: 0,
     graded: 0,
     settled: 0,
     pushed: 0,
     skipped: 0,
+    tooEarly: 0,
     errors: [],
     details: [],
   };
 
+  // Only open bets with a structured pick — cheap no-op when the book is quiet.
   const { data: events, error } = await admin
     .from("events")
     .select("id, title, status, created_by, pro_pick")
     .eq("kind", "bet")
-    .neq("status", "cancelled")
+    .eq("status", "open")
     .not("pro_pick", "is", null)
     .limit(200);
 
@@ -147,14 +154,20 @@ export async function runProGameRecon(admin: Admin): Promise<ReconSummary> {
     return summary;
   }
 
-  for (const event of events ?? []) {
+  if (!events?.length) {
+    return summary;
+  }
+
+  const now = new Date();
+
+  for (const event of events) {
     summary.scanned += 1;
     const pick = normalizeProPick(event.pro_pick);
     if (!pick) {
       summary.skipped += 1;
       continue;
     }
-    if (pick.graded || event.status === "completed") {
+    if (pick.graded) {
       summary.skipped += 1;
       continue;
     }
@@ -162,6 +175,14 @@ export async function runProGameRecon(admin: Admin): Promise<ReconSummary> {
       summary.skipped += 1;
       continue;
     }
+
+    // Football: start polling ~3h after kickoff, then every cron tick (15m).
+    if (!isInReconWindow(pick, now)) {
+      summary.tooEarly += 1;
+      continue;
+    }
+
+    summary.due += 1;
 
     try {
       const final = await fetchProGameFinal(
@@ -174,6 +195,7 @@ export async function runProGameRecon(admin: Admin): Promise<ReconSummary> {
         final.homeScore == null ||
         final.awayScore == null
       ) {
+        // Still in the window but game not final yet — try again next tick.
         summary.skipped += 1;
         continue;
       }
@@ -186,7 +208,7 @@ export async function runProGameRecon(admin: Admin): Promise<ReconSummary> {
         finalHome: final.homeScore,
         finalAway: final.awayScore,
         gradedAt: new Date().toISOString(),
-        note: final.status,
+        note: `${final.status} · recon after +${reconDelayHours(pick.sport)}h`,
       };
 
       const { data: players } = await admin
