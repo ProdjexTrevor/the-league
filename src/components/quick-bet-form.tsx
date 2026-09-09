@@ -131,6 +131,7 @@ export function QuickBetForm({
       : ""
   );
   const [miniGame, setMiniGame] = useState("");
+  const [proPickJson, setProPickJson] = useState("");
   const [wagerType, setWagerType] = useState<"straight" | "odds">("straight");
   const [matchup, setMatchup] = useState<"person" | "team">("person");
   const [myStake, setMyStake] = useState("20");
@@ -227,6 +228,7 @@ export function QuickBetForm({
                 setPresetId(p.id);
                 if (p.id !== "pro-game") {
                   setTitle(p.title);
+                  setProPickJson("");
                 }
                 if (p.id !== "h2h") setMiniGame("");
               }}
@@ -255,9 +257,10 @@ export function QuickBetForm({
       {presetId === "pro-game" ? (
         <div className="mt-4">
           <ProGamePicker
-            onPick={({ title: t, line: l }) => {
+            onPick={({ title: t, line: l, proPick }) => {
               setTitle(t);
               setLine(l);
+              setProPickJson(JSON.stringify(proPick));
             }}
           />
         </div>
@@ -271,6 +274,7 @@ export function QuickBetForm({
         <input type="hidden" name="stake_b" value={stakeB} />
         <input type="hidden" name="trip_id" value={tripId} />
         <input type="hidden" name="mini_game" value={miniGame} />
+        <input type="hidden" name="pro_pick" value={proPickJson} />
 
         {trips.length > 0 ? (
           <label className="block">

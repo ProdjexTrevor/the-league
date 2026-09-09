@@ -34,6 +34,9 @@ export const PRO_SPORTS: {
 export type ProMarket = {
   id: string;
   kind: "moneyline" | "spread" | "total";
+  side: "home" | "away" | "over" | "under";
+  /** Spread for that side, or the total number. */
+  lineValue: number | null;
   label: string;
   title: string;
   line: string;
@@ -114,6 +117,8 @@ function buildMarkets(
     markets.push({
       id: "ml-away",
       kind: "moneyline",
+      side: "away",
+      lineValue: null,
       label: `${awayAbbr} ML ${awayMl}`,
       title: `${away} moneyline vs ${home}`,
       line: `${sportLabel}: ${away} ML ${awayMl} (ref DraftKings)`,
@@ -123,6 +128,8 @@ function buildMarkets(
     markets.push({
       id: "ml-home",
       kind: "moneyline",
+      side: "home",
+      lineValue: null,
       label: `${homeAbbr} ML ${homeMl}`,
       title: `${home} moneyline vs ${away}`,
       line: `${sportLabel}: ${home} ML ${homeMl} (ref DraftKings)`,
@@ -132,18 +139,24 @@ function buildMarkets(
   const awaySpread = odds.pointSpread?.away?.close;
   const homeSpread = odds.pointSpread?.home?.close;
   if (awaySpread?.line) {
+    const lineValue = Number(String(awaySpread.line).replace(/[^\d.+-]/g, ""));
     markets.push({
       id: "spread-away",
       kind: "spread",
+      side: "away",
+      lineValue: Number.isFinite(lineValue) ? lineValue : null,
       label: `${awayAbbr} ${awaySpread.line}${awaySpread.odds ? ` (${awaySpread.odds})` : ""}`,
       title: `${away} ${awaySpread.line} vs ${home}`,
       line: `${sportLabel} spread: ${away} ${awaySpread.line}${awaySpread.odds ? ` ${awaySpread.odds}` : ""} (ref DraftKings)`,
     });
   }
   if (homeSpread?.line) {
+    const lineValue = Number(String(homeSpread.line).replace(/[^\d.+-]/g, ""));
     markets.push({
       id: "spread-home",
       kind: "spread",
+      side: "home",
+      lineValue: Number.isFinite(lineValue) ? lineValue : null,
       label: `${homeAbbr} ${homeSpread.line}${homeSpread.odds ? ` (${homeSpread.odds})` : ""}`,
       title: `${home} ${homeSpread.line} vs ${away}`,
       line: `${sportLabel} spread: ${home} ${homeSpread.line}${homeSpread.odds ? ` ${homeSpread.odds}` : ""} (ref DraftKings)`,
@@ -157,9 +170,12 @@ function buildMarkets(
       ? String(odds.overUnder)
       : over?.line?.replace(/^[ou]/i, "") ?? null;
   if (ou) {
+    const lineValue = Number(String(ou).replace(/[^\d.+-]/g, ""));
     markets.push({
       id: "total-over",
       kind: "total",
+      side: "over",
+      lineValue: Number.isFinite(lineValue) ? lineValue : null,
       label: `Over ${ou}${over?.odds ? ` (${over.odds})` : ""}`,
       title: `${awayAbbr} @ ${homeAbbr} over ${ou}`,
       line: `${sportLabel} total: Over ${ou}${over?.odds ? ` ${over.odds}` : ""} (ref DraftKings)`,
@@ -167,6 +183,8 @@ function buildMarkets(
     markets.push({
       id: "total-under",
       kind: "total",
+      side: "under",
+      lineValue: Number.isFinite(lineValue) ? lineValue : null,
       label: `Under ${ou}${under?.odds ? ` (${under.odds})` : ""}`,
       title: `${awayAbbr} @ ${homeAbbr} under ${ou}`,
       line: `${sportLabel} total: Under ${ou}${under?.odds ? ` ${under.odds}` : ""} (ref DraftKings)`,
@@ -323,3 +341,82 @@ export async function fetchProGames(sport: ProSport): Promise<ProGame[]> {
 
   return games;
 }
+
+export type ProGameFinal = {
+  espnEventId: string;
+  completed: boolean;
+  homeScore: number | null;
+  awayScore: number | null;
+  status: string;
+};
+
+/** Fetch a single event’s final (or live) score from ESPN. */
+export async function fetchProGameFinal(
+  sport: ProSport,
+  espnEventId: string
+): Promise<ProGameFinal | null> {
+  const meta = PRO_SPORTS.find((s) => s.id === sport);
+  if (!meta) return null;
+
+  const urls = [
+    `https://site.web.api.espn.com/apis/site/v2/sports/${meta.path}/summary?event=${espnEventId}`,
+    `https://site.api.espn.com/apis/site/v2/sports/${meta.path}/summary?event=${espnEventId}`,
+  ];
+
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        headers: ESPN_HEADERS,
+        cache: "no-store",
+      });
+      if (!res.ok) continue;
+      const data = (await res.json()) as {
+        header?: {
+          id?: string;
+          competitions?: Array<{
+            competitors?: Array<{
+              homeAway?: string;
+              score?: string | number;
+            }>;
+            status?: {
+              type?: {
+                completed?: boolean;
+                name?: string;
+                description?: string;
+                shortDetail?: string;
+              };
+            };
+          }>;
+        };
+      };
+      const comp = data.header?.competitions?.[0];
+      if (!comp) continue;
+      const home = comp.competitors?.find((c) => c.homeAway === "home");
+      const away = comp.competitors?.find((c) => c.homeAway === "away");
+      const homeScore =
+        home?.score != null && home.score !== ""
+          ? Number(home.score)
+          : null;
+      const awayScore =
+        away?.score != null && away.score !== ""
+          ? Number(away.score)
+          : null;
+      const completed = Boolean(comp.status?.type?.completed);
+      return {
+        espnEventId,
+        completed,
+        homeScore: Number.isFinite(homeScore as number) ? homeScore : null,
+        awayScore: Number.isFinite(awayScore as number) ? awayScore : null,
+        status:
+          comp.status?.type?.shortDetail ??
+          comp.status?.type?.description ??
+          comp.status?.type?.name ??
+          (completed ? "Final" : "In progress"),
+      };
+    } catch {
+      // try next
+    }
+  }
+  return null;
+}
+

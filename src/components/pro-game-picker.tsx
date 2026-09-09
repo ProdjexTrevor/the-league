@@ -8,7 +8,23 @@ const labelCls =
   "text-[11px] font-semibold uppercase tracking-[0.14em] text-muted";
 
 type Props = {
-  onPick: (pick: { title: string; line: string; marketLabel: string }) => void;
+  onPick: (pick: {
+    title: string;
+    line: string;
+    marketLabel: string;
+    proPick: {
+      espnEventId: string;
+      sport: string;
+      marketKind: "moneyline" | "spread" | "total" | "game";
+      side: "home" | "away" | "over" | "under" | null;
+      lineValue: number | null;
+      home: string;
+      away: string;
+      homeAbbr: string;
+      awayAbbr: string;
+      marketLabel: string;
+    };
+  }) => void;
 };
 
 export function ProGamePicker({ onPick }: Props) {
@@ -53,6 +69,18 @@ export function ProGamePicker({ onPick }: Props) {
       title: market.title,
       line: market.line,
       marketLabel: market.label,
+      proPick: {
+        espnEventId: game.id,
+        sport: game.sport,
+        marketKind: market.kind,
+        side: market.side,
+        lineValue: market.lineValue,
+        home: game.home,
+        away: game.away,
+        homeAbbr: game.homeAbbr,
+        awayAbbr: game.awayAbbr,
+        marketLabel: market.label,
+      },
     });
   }
 
@@ -61,6 +89,18 @@ export function ProGamePicker({ onPick }: Props) {
       title: `${game.away} @ ${game.home}`,
       line: `${game.sportLabel} · ${game.start ?? game.status}`,
       marketLabel: "Game only",
+      proPick: {
+        espnEventId: game.id,
+        sport: game.sport,
+        marketKind: "game",
+        side: null,
+        lineValue: null,
+        home: game.home,
+        away: game.away,
+        homeAbbr: game.homeAbbr,
+        awayAbbr: game.awayAbbr,
+        marketLabel: "Game only",
+      },
     });
   }
 
@@ -68,8 +108,8 @@ export function ProGamePicker({ onPick }: Props) {
     <div className="rounded-2xl border border-accent/30 bg-accent/5 p-3">
       <p className={labelCls}>Today&apos;s pro games</p>
       <p className="mt-1 text-xs text-muted">
-        Pick a game, then a line to fill your bet. Reference lines when ESPN has
-        them — you still settle with your friend.
+        Pick a game and a line. Once both sides accept, we recon ESPN finals
+        overnight and settle win/loss automatically.
       </p>
 
       <div className="mt-3 flex flex-wrap gap-1.5">

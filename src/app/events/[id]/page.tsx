@@ -15,6 +15,7 @@ import { BetClaimPanel } from "@/components/bet-claim-panel";
 import { GolfClubDraftPanel } from "@/components/golf-club-draft-panel";
 import { getSupabase, requireUser } from "@/lib/auth";
 import { isGolfClubDraft, normalizeGolfClubDraft } from "@/lib/mini-games";
+import { normalizeProPick } from "@/lib/pro-pick";
 import {
   eventKindLabel,
   formatMoney,
@@ -246,6 +247,45 @@ export default async function EventPage({ params }: Props) {
           </p>
         ) : null}
       </header>
+
+      {(() => {
+        const pick = normalizeProPick(event.pro_pick);
+        if (!pick) return null;
+        const scoreLine =
+          pick.finalHome != null && pick.finalAway != null
+            ? `Final ${pick.awayAbbr} ${pick.finalAway} – ${pick.homeAbbr} ${pick.finalHome}`
+            : null;
+        return (
+          <section className="mt-6 rounded-2xl border border-line bg-bg-elevated/70 px-4 py-3 text-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+              Pro game · auto settle
+            </p>
+            <p className="mt-1 font-medium">
+              {pick.awayAbbr} @ {pick.homeAbbr}
+              {pick.marketLabel ? ` · ${pick.marketLabel}` : ""}
+            </p>
+            {pick.graded ? (
+              <p className="mt-1 text-accent">
+                Graded: {pick.result}
+                {scoreLine ? ` · ${scoreLine}` : ""}
+                {pick.gradedAt
+                  ? ` · ${new Date(pick.gradedAt).toLocaleString()}`
+                  : ""}
+              </p>
+            ) : pick.side ? (
+              <p className="mt-1 text-muted">
+                Nightly recon will grade this from ESPN once the game is final
+                and both sides have accepted.
+              </p>
+            ) : (
+              <p className="mt-1 text-muted">
+                Game-only pick — settle this one manually (no published line to
+                grade).
+              </p>
+            )}
+          </section>
+        );
+      })()}
 
       {myInviteStatus === "pending" && event.status !== "completed" && (
         <section className="mt-6 rounded-2xl border border-accent/40 bg-accent/10 p-4">
@@ -544,15 +584,28 @@ export default async function EventPage({ params }: Props) {
       {event.status !== "completed" &&
         isBet &&
         betLocked &&
-        myInviteStatus === "accepted" && (
-          <BetClaimPanel
-            eventId={id}
-            options={claimOptions}
-            myClaim={myClaim}
-            claims={claimRows}
-            acceptedCount={acceptedPlayers.length}
-          />
-        )}
+        myInviteStatus === "accepted" &&
+        (() => {
+          const pick = normalizeProPick(event.pro_pick);
+          // Auto-recon handles published lines; keep manual claim for game-only.
+          if (pick?.side && !pick.graded) {
+            return (
+              <p className="mt-8 rounded-2xl border border-line bg-bg-elevated/60 px-4 py-3 text-sm text-muted">
+                Waiting on the nightly ESPN recon to grade and settle this
+                pick. You can still refresh later — no manual claim needed.
+              </p>
+            );
+          }
+          return (
+            <BetClaimPanel
+              eventId={id}
+              options={claimOptions}
+              myClaim={myClaim}
+              claims={claimRows}
+              acceptedCount={acceptedPlayers.length}
+            />
+          );
+        })()}
 
       {event.status !== "completed" &&
         !isBet &&

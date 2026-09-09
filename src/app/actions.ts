@@ -267,6 +267,9 @@ export async function quickBet(formData: FormData) {
   const miniGame = String(formData.get("mini_game") ?? "").trim();
   if (miniGame) fd.set("mini_game", miniGame);
 
+  const proPickRaw = String(formData.get("pro_pick") ?? "").trim();
+  if (proPickRaw) fd.set("pro_pick", proPickRaw);
+
   if (matchup === "person") {
     const againstId = String(formData.get("against_id") ?? "").trim();
     const myStake = Number(formData.get("my_stake") ?? 0);
@@ -704,6 +707,25 @@ export async function createEvent(formData: FormData) {
       })
       .eq("id", data.id);
     if (miniError) fail(miniError.message);
+  }
+
+  const proPickRaw = String(formData.get("pro_pick") ?? "").trim();
+  if (proPickRaw) {
+    try {
+      const parsed = JSON.parse(proPickRaw) as Record<string, unknown>;
+      const proPick = {
+        ...parsed,
+        pickerUserId: user.id,
+        graded: false,
+      };
+      const { error: pickError } = await supabase
+        .from("events")
+        .update({ pro_pick: proPick })
+        .eq("id", data.id);
+      if (pickError) fail(pickError.message);
+    } catch {
+      fail("Could not save the pro game pick.");
+    }
   }
 
   revalidatePath("/app");
