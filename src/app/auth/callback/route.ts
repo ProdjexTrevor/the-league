@@ -5,7 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/app";
+  const nextRaw = searchParams.get("next") ?? "/app";
+  // Only allow relative in-app redirects
+  const next =
+    nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/app";
 
   if (code) {
     const supabase = await createClient();
@@ -13,6 +16,14 @@ export async function GET(request: Request) {
     if (!error) {
       return NextResponse.redirect(`${origin}${next}`);
     }
+  }
+
+  // Invite / recovery sometimes lands without code if misconfigured
+  const err = searchParams.get("error_description") ?? searchParams.get("error");
+  if (err) {
+    return NextResponse.redirect(
+      `${origin}/login?error=${encodeURIComponent(err)}`
+    );
   }
 
   return NextResponse.redirect(`${origin}/login?error=auth`);

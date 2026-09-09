@@ -103,6 +103,47 @@ export async function markCounterpartyPaid(formData: FormData) {
   revalidatePath("/wallet");
 }
 
+/** Invite someone by email via Supabase Auth (sets password on first open). */
+export async function inviteFriendByEmail(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const displayName = String(formData.get("display_name") ?? "").trim();
+  if (!email || !email.includes("@")) fail("Enter a valid email.");
+
+  const { user } = await ensureProfile();
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+    "https://the-league-ivory.vercel.app";
+
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch (e) {
+    fail(e instanceof Error ? e.message : "Invite service isn’t configured.");
+  }
+
+  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
+    data: {
+      display_name: displayName || email.split("@")[0],
+      invited_by: user.id,
+    },
+    redirectTo: `${appUrl}/auth/callback?next=${encodeURIComponent("/update-password")}`,
+  });
+
+  if (error) fail(error.message);
+
+  // Best-effort profile row (trigger usually creates it)
+  if (data.user) {
+    await admin.from("profiles").upsert({
+      id: data.user.id,
+      display_name: displayName || email.split("@")[0],
+    });
+  }
+
+  revalidatePath("/friends");
+  return { ok: true as const, email };
+}
+
 export async function createLeague(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();

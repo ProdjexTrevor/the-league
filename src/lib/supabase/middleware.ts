@@ -64,7 +64,8 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/leagues") ||
     path.startsWith("/events") ||
     path.startsWith("/players") ||
-    path.startsWith("/catalog");
+    path.startsWith("/catalog") ||
+    path.startsWith("/trips");
 
   if (!user && isProtected) {
     const redirectUrl = request.nextUrl.clone();

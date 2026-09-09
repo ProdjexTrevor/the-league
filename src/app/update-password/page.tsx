@@ -19,13 +19,26 @@ export default function UpdatePasswordPage() {
     let cancelled = false;
 
     async function prepare() {
-      // Recovery links may land with hash tokens; give the client a tick to parse them.
+      // PKCE recovery/invite: ?code= may still be on this URL if callback was skipped
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error && !cancelled) {
+          setError(error.message);
+          setReady(false);
+          return;
+        }
+        window.history.replaceState({}, "", "/update-password");
+      }
+
+      // Hash tokens from older email templates
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (cancelled) return;
       if (!session) {
-        setError("This reset link is missing or expired. Request a new one.");
+        setError("This reset or invite link is missing or expired. Request a new one.");
         setReady(false);
         return;
       }
@@ -79,8 +92,13 @@ export default function UpdatePasswordPage() {
         <Link href="/" className="font-display text-3xl text-fg">
           THE LEAGUE
         </Link>
-        <h1 className="mt-10 text-2xl font-semibold tracking-tight">Set a new password</h1>
-        <p className="mt-2 text-sm text-muted">Choose a password for your League account.</p>
+        <h1 className="mt-10 text-2xl font-semibold tracking-tight">
+          Set your password
+        </h1>
+        <p className="mt-2 text-sm text-muted">
+          For password resets and email invites — choose a password for your
+          League account.
+        </p>
 
         <form onSubmit={onSubmit} className="mt-8 space-y-4">
           <label className="block text-sm">

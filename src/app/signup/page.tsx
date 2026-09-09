@@ -44,7 +44,7 @@ export default function SignupPage() {
           display_name: displayName,
           venmo_username: venmo,
         },
-        emailRedirectTo: `${origin}/auth/callback`,
+        emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/app")}`,
       },
     });
     setLoading(false);

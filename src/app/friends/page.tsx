@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
+import { InviteFriendForm } from "@/components/invite-friend-form";
 import { createClient } from "@/lib/supabase/server";
 import { venmoPayUrl } from "@/lib/venmo";
 
@@ -111,8 +112,12 @@ export default async function FriendsPage() {
   return (
     <AppShell userId={user.id} title="Friends">
       <p className="mb-4 text-sm text-muted">
-        Your crew from leagues — bet, pay, or check the scoreboard.
+        Invite new people with Supabase Auth, or bet / pay your existing crew.
       </p>
+
+      <div className="mb-8">
+        <InviteFriendForm />
+      </div>
 
       {friends.length === 0 ? (
         <div className="rounded-2xl border border-line bg-bg-elevated/70 px-4 py-6 text-center">
