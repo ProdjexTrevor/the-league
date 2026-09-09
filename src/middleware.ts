@@ -7,8 +7,21 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Skip static assets and public auth marketing that do not need session gate.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/app/:path*",
+    "/bet/:path*",
+    "/create/:path*",
+    "/wallet/:path*",
+    "/friends/:path*",
+    "/leagues/:path*",
+    "/events/:path*",
+    "/players/:path*",
+    "/catalog/:path*",
+    "/trips/:path*",
+    "/login",
+    "/signup",
+    "/forgot-password",
+    "/update-password",
+    "/auth/callback",
   ],
 };

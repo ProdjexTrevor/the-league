@@ -1,19 +1,19 @@
 import { Bebas_Neue, DM_Sans } from "next/font/google";
 import type { Metadata, Viewport } from "next";
 
-import { AuthRecoveryRedirect } from "@/components/auth-recovery-redirect";
-
 import "./globals.css";
 
 const display = Bebas_Neue({
   weight: "400",
   subsets: ["latin"],
   variable: "--font-display",
+  display: "swap",
 });
 
 const sans = DM_Sans({
   subsets: ["latin"],
   variable: "--font-sans",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -34,10 +34,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${display.variable} ${sans.variable} h-full`}>
-      <body className="min-h-full font-sans antialiased">
-        <AuthRecoveryRedirect />
-        {children}
-      </body>
+      <body className="min-h-full font-sans antialiased">{children}</body>
     </html>
   );
 }

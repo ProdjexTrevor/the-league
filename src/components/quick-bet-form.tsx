@@ -1,9 +1,20 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState, useTransition } from "react";
 
 import { quickBet } from "@/app/actions";
-import { ProGamePicker } from "@/components/pro-game-picker";
+
+const ProGamePicker = dynamic(
+  () =>
+    import("@/components/pro-game-picker").then((m) => m.ProGamePicker),
+  {
+    loading: () => (
+      <p className="text-sm text-muted">Loading today&apos;s slate…</p>
+    ),
+    ssr: false,
+  }
+);
 
 type Opponent = { id: string; display_name: string | null };
 

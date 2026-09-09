@@ -1,45 +1,43 @@
-import { redirect } from "next/navigation";
-
 import {
   markCounterpartyPaid,
   updateVenmoUsername,
 } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
-import { createClient } from "@/lib/supabase/server";
+import { getSupabase, requireUser } from "@/lib/auth";
 import { venmoPayUrl } from "@/lib/venmo";
 
 export const dynamic = "force-dynamic";
 
 export default async function WalletPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login?next=/wallet");
+  const user = await requireUser("/wallet");
+  const supabase = await getSupabase();
 
-  await supabase.rpc("repair_my_wallet_obligations");
-
-  const { data: me } = await supabase
-    .from("profiles")
-    .select("display_name, venmo_username")
-    .eq("id", user.id)
-    .single();
-
-  const [{ data: owedRows, error: owedError }, { data: dueRows, error: dueError }] =
-    await Promise.all([
-      supabase
-        .from("wallet_obligations")
-        .select("id, to_user_id, amount, event_id, status, events(title)")
-        .eq("from_user_id", user.id)
-        .eq("status", "open")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("wallet_obligations")
-        .select("id, from_user_id, amount, event_id, status, events(title)")
-        .eq("to_user_id", user.id)
-        .eq("status", "open")
-        .order("created_at", { ascending: false }),
-    ]);
+  // Repair only on wallet, in parallel with reads (doesn't block other queries alone)
+  const [
+    ,
+    { data: me },
+    { data: owedRows, error: owedError },
+    { data: dueRows, error: dueError },
+  ] = await Promise.all([
+    supabase.rpc("repair_my_wallet_obligations"),
+    supabase
+      .from("profiles")
+      .select("display_name, venmo_username")
+      .eq("id", user.id)
+      .single(),
+    supabase
+      .from("wallet_obligations")
+      .select("id, to_user_id, amount, event_id, status, events(title)")
+      .eq("from_user_id", user.id)
+      .eq("status", "open")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("wallet_obligations")
+      .select("id, from_user_id, amount, event_id, status, events(title)")
+      .eq("to_user_id", user.id)
+      .eq("status", "open")
+      .order("created_at", { ascending: false }),
+  ]);
 
   const walletError = owedError?.message ?? dueError?.message ?? null;
 

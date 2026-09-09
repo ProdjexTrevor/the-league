@@ -1,10 +1,8 @@
-import { redirect } from "next/navigation";
-
 import { AppShell } from "@/components/app-shell";
 import { BrandPill } from "@/components/brand";
 import { NewBetsPanel, type NewBetInvite } from "@/components/new-bets-panel";
 import { TheBook } from "@/components/the-book";
-import { createClient } from "@/lib/supabase/server";
+import { getSupabase, requireUser } from "@/lib/auth";
 import { venmoPayUrl } from "@/lib/venmo";
 
 export const dynamic = "force-dynamic";
@@ -17,133 +15,70 @@ function money(n: number) {
   return `$${formatted}`;
 }
 
+type BookEvent = {
+  id: string;
+  title: string;
+  kind: string;
+  status: string;
+  entry_fee_units: number;
+  default_stake_units: number | null;
+  wager_mode: string;
+  notes: string | null;
+  created_at: string;
+  league_id: string | null;
+  myInviteStatus?: string | null;
+  waitingOnOthers?: boolean;
+};
+
 export default async function AppPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const user = await requireUser("/app");
+  const supabase = await getSupabase();
 
-  await supabase.rpc("repair_my_wallet_obligations");
+  const eventSelect =
+    "id, title, kind, status, entry_fee_units, default_stake_units, wager_mode, notes, created_at, league_id, created_by";
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("display_name")
-    .eq("id", user.id)
-    .single();
-
+  // Single wave: profile + book + wallet + my participation (incl. pending)
   const [
+    { data: profile },
     { data: myEvents },
     { data: owedRows },
     { data: dueRows },
-    { data: pendingRows },
     { data: playing },
   ] = await Promise.all([
+    supabase.from("profiles").select("display_name").eq("id", user.id).single(),
     supabase
       .from("events")
-      .select(
-        "id, title, kind, status, entry_fee_units, default_stake_units, wager_mode, notes, created_at, league_id"
-      )
+      .select(eventSelect)
       .eq("created_by", user.id)
       .order("created_at", { ascending: false })
       .limit(40),
     supabase
       .from("wallet_obligations")
-      .select("id, to_user_id, amount, events(title)")
+      .select("to_user_id, amount")
       .eq("from_user_id", user.id)
       .eq("status", "open"),
     supabase
       .from("wallet_obligations")
-      .select("id, from_user_id, amount, events(title)")
+      .select("from_user_id, amount")
       .eq("to_user_id", user.id)
       .eq("status", "open"),
     supabase
       .from("event_players")
-      .select("event_id")
-      .eq("user_id", user.id)
-      .eq("invite_status", "pending"),
-    supabase
-      .from("event_players")
-      .select(
-        "event_id, invite_status, events(id, title, kind, status, entry_fee_units, default_stake_units, wager_mode, notes, created_at, league_id)"
-      )
+      .select(`invite_status, event_id, events(${eventSelect})`)
       .eq("user_id", user.id)
       .limit(50),
   ]);
 
-  const pendingEventIds = pendingRows?.map((row) => row.event_id) ?? [];
-  type PendingEventRow = {
-    id: string;
-    title: string;
-    kind: string;
-    status: string;
-    entry_fee_units: number;
-    default_stake_units: number;
-    wager_mode: string;
-    notes: string | null;
-    created_at: string;
-    league_id: string | null;
-    created_by: string;
-  };
-  const { data: pendingEvents } =
-    pendingEventIds.length > 0
-      ? await supabase
-          .from("events")
-          .select(
-            "id, title, kind, status, entry_fee_units, default_stake_units, wager_mode, notes, created_at, league_id, created_by"
-          )
-          .in("id", pendingEventIds)
-          .order("created_at", { ascending: false })
-      : { data: [] as PendingEventRow[] };
-
-  const creatorIds = [
-    ...new Set(
-      (pendingEvents ?? [])
-        .map((event) => event.created_by)
-        .filter(Boolean) as string[]
-    ),
-  ];
-  const { data: creators } =
-    creatorIds.length > 0
-      ? await supabase
-          .from("profiles")
-          .select("id, display_name")
-          .in("id", creatorIds)
-      : { data: [] };
-  const creatorById = new Map(creators?.map((p) => [p.id, p.display_name]) ?? []);
-
-  const { data: myStakes } =
-    pendingEventIds.length > 0
-      ? await supabase
-          .from("wager_lines")
-          .select("event_id, stake_units")
-          .in("event_id", pendingEventIds)
-          .eq("player_id", user.id)
-      : { data: [] };
-  const myStakeByEvent = new Map(
-    myStakes?.map((line) => [line.event_id, Number(line.stake_units)]) ?? []
+  const eventMap = new Map<string, BookEvent>();
+  myEvents?.forEach((e) =>
+    eventMap.set(e.id, { ...e, myInviteStatus: "accepted" })
   );
 
-  const newBets: NewBetInvite[] = (pendingEvents ?? []).map((event) => ({
-    id: event.id,
-    title: event.title,
-    kind: event.kind,
-    notes: event.notes,
-    default_stake_units: event.default_stake_units,
-    entry_fee_units: event.entry_fee_units,
-    created_at: event.created_at,
-    creatorName: creatorById.get(event.created_by) ?? "Someone",
-    myStake: myStakeByEvent.get(event.id) ?? 0,
-  }));
+  const pendingFromPlaying: {
+    event_id: string;
+    event: BookEvent | null;
+  }[] = [];
 
-  const eventMap = new Map<
-    string,
-    NonNullable<(typeof myEvents)>[number] & {
-      myInviteStatus?: string | null;
-      waitingOnOthers?: boolean;
-    }
-  >();
-  myEvents?.forEach((e) => eventMap.set(e.id, { ...e, myInviteStatus: "accepted" }));
   playing?.forEach((row) => {
     const e = Array.isArray(row.events) ? row.events[0] : row.events;
     if (e) {
@@ -152,53 +87,23 @@ export default async function AppPage() {
         myInviteStatus: row.invite_status,
       });
     }
-  });
-  // Prefer pending event fetch (more reliable nested join), mark invites
-  for (const event of pendingEvents ?? []) {
-    eventMap.set(event.id, {
-      id: event.id,
-      title: event.title,
-      kind: event.kind,
-      status: event.status,
-      entry_fee_units: event.entry_fee_units,
-      default_stake_units: event.default_stake_units,
-      wager_mode: event.wager_mode,
-      notes: event.notes,
-      created_at: event.created_at,
-      league_id: event.league_id,
-      myInviteStatus: "pending",
-    });
-  }
-
-  // Mark events I created/accepted that still have pending invitees
-  const openEventIds = [...eventMap.values()]
-    .filter((e) => e.status === "open" || e.status === "in_progress")
-    .map((e) => e.id);
-  if (openEventIds.length > 0) {
-    const { data: pendingOthers } = await supabase
-      .from("event_players")
-      .select("event_id")
-      .in("event_id", openEventIds)
-      .eq("invite_status", "pending");
-    const waitingIds = new Set(pendingOthers?.map((r) => r.event_id) ?? []);
-    for (const id of waitingIds) {
-      const existing = eventMap.get(id);
-      if (existing && existing.myInviteStatus !== "pending") {
-        eventMap.set(id, { ...existing, waitingOnOthers: true });
-      }
+    if (row.invite_status === "pending") {
+      pendingFromPlaying.push({
+        event_id: row.event_id,
+        event: e
+          ? { ...e, myInviteStatus: "pending" }
+          : null,
+      });
     }
-  }
+  });
 
-  const events = Array.from(eventMap.values()).sort(
-    (a, b) => +new Date(b.created_at) - +new Date(a.created_at)
-  );
-
-  const liveStake = events
-    .filter((e) => e.status === "open" || e.status === "in_progress")
-    .reduce(
-      (s, e) => s + Number(e.default_stake_units ?? e.entry_fee_units ?? 0),
-      0
-    );
+  // If nested events join failed for any pending rows, fetch those events directly
+  const missingPendingIds = pendingFromPlaying
+    .filter((p) => !p.event)
+    .map((p) => p.event_id);
+  const pendingEventsWithJoin = pendingFromPlaying
+    .map((p) => p.event)
+    .filter(Boolean) as BookEvent[];
 
   const owedByPerson = new Map<string, number>();
   for (const row of owedRows ?? []) {
@@ -215,21 +120,138 @@ export default async function AppPage() {
     );
   }
 
-  const totalOwed = [...owedByPerson.values()].reduce((s, v) => s + v, 0);
-  const totalDue = [...dueByPerson.values()].reduce((s, v) => s + v, 0);
-  const net = totalDue - totalOwed;
+  const openEventIds = [...eventMap.values()]
+    .filter((e) => e.status === "open" || e.status === "in_progress")
+    .map((e) => e.id);
 
   const personIds = [
     ...new Set([...owedByPerson.keys(), ...dueByPerson.keys()]),
   ];
 
-  const { data: people } =
+  const creatorIdsFromJoin = [
+    ...new Set(
+      pendingEventsWithJoin
+        .map((e) => (e as BookEvent & { created_by?: string }).created_by)
+        .filter(Boolean) as string[]
+    ),
+  ];
+
+  // Second wave: fill gaps + labels in parallel
+  const [
+    { data: missingPendingEvents },
+    { data: pendingOthers },
+    { data: people },
+    { data: creatorsWave1 },
+    { data: myStakesWave1 },
+  ] = await Promise.all([
+    missingPendingIds.length > 0
+      ? supabase
+          .from("events")
+          .select(eventSelect)
+          .in("id", missingPendingIds)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] as BookEvent[] }),
+    openEventIds.length > 0
+      ? supabase
+          .from("event_players")
+          .select("event_id")
+          .in("event_id", openEventIds)
+          .eq("invite_status", "pending")
+      : Promise.resolve({ data: [] as { event_id: string }[] }),
     personIds.length > 0
-      ? await supabase
+      ? supabase
           .from("profiles")
           .select("id, display_name, venmo_username")
           .in("id", personIds)
-      : { data: [] };
+      : Promise.resolve({ data: [] as { id: string; display_name: string | null; venmo_username: string | null }[] }),
+    creatorIdsFromJoin.length > 0
+      ? supabase
+          .from("profiles")
+          .select("id, display_name")
+          .in("id", creatorIdsFromJoin)
+      : Promise.resolve({ data: [] as { id: string; display_name: string | null }[] }),
+    pendingFromPlaying.length > 0
+      ? supabase
+          .from("wager_lines")
+          .select("event_id, stake_units")
+          .in(
+            "event_id",
+            pendingFromPlaying.map((p) => p.event_id)
+          )
+          .eq("player_id", user.id)
+      : Promise.resolve({ data: [] as { event_id: string; stake_units: number }[] }),
+  ]);
+
+  for (const event of missingPendingEvents ?? []) {
+    eventMap.set(event.id, { ...event, myInviteStatus: "pending" });
+    pendingEventsWithJoin.push({ ...event, myInviteStatus: "pending" });
+  }
+
+  const waitingIds = new Set(pendingOthers?.map((r) => r.event_id) ?? []);
+  for (const id of waitingIds) {
+    const existing = eventMap.get(id);
+    if (existing && existing.myInviteStatus !== "pending") {
+      eventMap.set(id, { ...existing, waitingOnOthers: true });
+    }
+  }
+
+  const pendingEvents = [...eventMap.values()]
+    .filter((e) => e.myInviteStatus === "pending")
+    .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
+
+  // Creators for any pending fetched in the missing-events path
+  const allCreatorIds = [
+    ...new Set(
+      pendingEvents
+        .map((e) => (e as BookEvent & { created_by?: string }).created_by)
+        .filter(Boolean) as string[]
+    ),
+  ];
+  const creatorById = new Map(
+    creatorsWave1?.map((p) => [p.id, p.display_name]) ?? []
+  );
+  const missingCreatorIds = allCreatorIds.filter((id) => !creatorById.has(id));
+  if (missingCreatorIds.length > 0) {
+    const { data: moreCreators } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", missingCreatorIds);
+    moreCreators?.forEach((p) => creatorById.set(p.id, p.display_name));
+  }
+
+  const myStakeByEvent = new Map(
+    myStakesWave1?.map((line) => [line.event_id, Number(line.stake_units)]) ?? []
+  );
+
+  const newBets: NewBetInvite[] = pendingEvents.map((event) => ({
+    id: event.id,
+    title: event.title,
+    kind: event.kind,
+    notes: event.notes,
+    default_stake_units: event.default_stake_units,
+    entry_fee_units: event.entry_fee_units,
+    created_at: event.created_at,
+    creatorName:
+      creatorById.get(
+        (event as BookEvent & { created_by?: string }).created_by ?? ""
+      ) ?? "Someone",
+    myStake: myStakeByEvent.get(event.id) ?? 0,
+  }));
+
+  const events = Array.from(eventMap.values()).sort(
+    (a, b) => +new Date(b.created_at) - +new Date(a.created_at)
+  );
+
+  const liveStake = events
+    .filter((e) => e.status === "open" || e.status === "in_progress")
+    .reduce(
+      (s, e) => s + Number(e.default_stake_units ?? e.entry_fee_units ?? 0),
+      0
+    );
+
+  const totalOwed = [...owedByPerson.values()].reduce((s, v) => s + v, 0);
+  const totalDue = [...dueByPerson.values()].reduce((s, v) => s + v, 0);
+  const net = totalDue - totalOwed;
   const personById = new Map(people?.map((p) => [p.id, p]) ?? []);
 
   return (

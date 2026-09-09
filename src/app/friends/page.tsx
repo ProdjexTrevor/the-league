@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
 import { InviteFriendForm } from "@/components/invite-friend-form";
-import { createClient } from "@/lib/supabase/server";
+import { getSupabase, requireUser } from "@/lib/auth";
 import { venmoPayUrl } from "@/lib/venmo";
 
 export const dynamic = "force-dynamic";
@@ -18,13 +17,8 @@ type Friend = {
 };
 
 export default async function FriendsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login?next=/friends");
-
-  await supabase.rpc("repair_my_wallet_obligations");
+  const user = await requireUser("/friends");
+  const supabase = await getSupabase();
 
   const [{ data: memberships }, { data: owedRows }, { data: dueRows }] =
     await Promise.all([

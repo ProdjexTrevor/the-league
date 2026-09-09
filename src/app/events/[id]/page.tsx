@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
 import {
   acceptEventInvite,
@@ -13,7 +13,7 @@ import { AcceptInviteButton } from "@/components/accept-invite-button";
 import { AppShell } from "@/components/app-shell";
 import { BetClaimPanel } from "@/components/bet-claim-panel";
 import { GolfClubDraftPanel } from "@/components/golf-club-draft-panel";
-import { createClient } from "@/lib/supabase/server";
+import { getSupabase, requireUser } from "@/lib/auth";
 import { isGolfClubDraft, normalizeGolfClubDraft } from "@/lib/mini-games";
 import {
   eventKindLabel,
@@ -32,11 +32,8 @@ type Props = { params: Promise<{ id: string }> };
 
 export default async function EventPage({ params }: Props) {
   const { id } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const user = await requireUser(`/events/${id}`);
+  const supabase = await getSupabase();
 
   const { data: event } = await supabase
     .from("events")
@@ -46,12 +43,16 @@ export default async function EventPage({ params }: Props) {
 
   if (!event) notFound();
 
+  const isBet = event.kind === "bet";
+  // Bets never invite mid-flight — skip full profiles scan
+  const needsInviteRoster = !isBet && event.status !== "completed";
+
   const [
     { data: catalog },
     { data: players },
     { data: lines },
     { data: members },
-    { data: profiles },
+    { data: inviteCandidates },
     { data: claims },
   ] = await Promise.all([
     supabase
@@ -72,16 +73,23 @@ export default async function EventPage({ params }: Props) {
           .select("user_id, profiles(display_name)")
           .eq("league_id", event.league_id)
       : Promise.resolve({ data: null }),
-    supabase.from("profiles").select("id, display_name").order("display_name"),
-    supabase
-      .from("bet_result_claims")
-      .select("user_id, winner_key")
-      .eq("event_id", id),
+    needsInviteRoster
+      ? supabase
+          .from("profiles")
+          .select("id, display_name")
+          .order("display_name")
+          .limit(60)
+      : Promise.resolve({ data: [] as { id: string; display_name: string }[] }),
+    isBet
+      ? supabase
+          .from("bet_result_claims")
+          .select("user_id, winner_key")
+          .eq("event_id", id)
+      : Promise.resolve({ data: [] as { user_id: string; winner_key: string }[] }),
   ]);
 
   const scoringMode = (catalog?.scoring_mode ?? "placement") as ScoringMode;
   const playerIds = new Set(players?.map((p) => p.user_id));
-  const isBet = event.kind === "bet";
 
   type InviteOption = {
     user_id: string;
@@ -89,7 +97,7 @@ export default async function EventPage({ params }: Props) {
   };
 
   const leagueMemberIds = new Set((members ?? []).map((m) => m.user_id));
-  const available: InviteOption[] = (profiles ?? [])
+  const available: InviteOption[] = (inviteCandidates ?? [])
     .filter((p) => !playerIds.has(p.id))
     .map((p) => ({
       user_id: p.id,

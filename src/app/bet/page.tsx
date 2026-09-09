@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
 import { QuickBetForm } from "@/components/quick-bet-form";
-import { createClient } from "@/lib/supabase/server";
+import { getSupabase, requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,17 +12,14 @@ type Props = {
 
 export default async function BetPage({ searchParams }: Props) {
   const { against, trip } = await searchParams;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login?next=/bet");
+  const user = await requireUser("/bet");
+  const supabase = await getSupabase();
 
   const [
     { data: memberships },
     { data: propCatalog },
-    { data: allProfiles },
     { data: tripMemberships },
+    { data: myPlayerRows },
   ] = await Promise.all([
     supabase
       .from("league_members")
@@ -34,11 +30,16 @@ export default async function BetPage({ searchParams }: Props) {
       .select("id")
       .eq("slug", "proposition")
       .maybeSingle(),
-    supabase.from("profiles").select("id, display_name").order("display_name"),
     supabase
       .from("trip_members")
       .select("trip_id, trips(id, name, status)")
       .eq("user_id", user.id),
+    // Recent counterparties instead of scanning every profile
+    supabase
+      .from("event_players")
+      .select("event_id")
+      .eq("user_id", user.id)
+      .limit(40),
   ]);
 
   const leagueIds =
@@ -49,29 +50,64 @@ export default async function BetPage({ searchParams }: Props) {
       })
       .filter(Boolean) ?? [];
 
-  const { data: roster } =
-    leagueIds.length > 0
-      ? await supabase
-          .from("league_members")
-          .select("user_id, profiles(id, display_name)")
-          .in("league_id", leagueIds as string[])
-      : { data: [] };
+  const myEventIds = [...new Set(myPlayerRows?.map((r) => r.event_id) ?? [])];
+
+  const [{ data: roster }, { data: peers }, { data: againstProfile }] =
+    await Promise.all([
+      leagueIds.length > 0
+        ? supabase
+            .from("league_members")
+            .select("user_id, profiles(id, display_name)")
+            .in("league_id", leagueIds as string[])
+        : Promise.resolve({ data: [] as { user_id: string; profiles: unknown }[] }),
+      myEventIds.length > 0
+        ? supabase
+            .from("event_players")
+            .select("user_id, profiles(id, display_name)")
+            .in("event_id", myEventIds)
+            .neq("user_id", user.id)
+            .limit(80)
+        : Promise.resolve({ data: [] as { user_id: string; profiles: unknown }[] }),
+      against && against !== user.id
+        ? supabase
+            .from("profiles")
+            .select("id, display_name")
+            .eq("id", against)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
 
   const opponentMap = new Map<
     string,
     { id: string; display_name: string | null }
   >();
+
+  function addOpp(p: { id: string; display_name: string | null } | null | undefined) {
+    if (!p?.id || p.id === user.id) return;
+    opponentMap.set(p.id, p);
+  }
+
   for (const row of roster ?? []) {
-    if (row.user_id === user.id) continue;
     const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
-    if (p?.id) opponentMap.set(p.id, p);
+    addOpp(p as { id: string; display_name: string | null } | null);
   }
-  for (const p of allProfiles ?? []) {
-    if (p.id === user.id) continue;
-    if (!opponentMap.has(p.id)) {
-      opponentMap.set(p.id, { id: p.id, display_name: p.display_name });
-    }
+  for (const row of peers ?? []) {
+    const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+    addOpp(p as { id: string; display_name: string | null } | null);
   }
+  addOpp(againstProfile);
+
+  // Fallback if brand-new account with no leagues/history
+  if (opponentMap.size === 0) {
+    const { data: someProfiles } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .neq("id", user.id)
+      .order("display_name")
+      .limit(40);
+    someProfiles?.forEach((p) => addOpp(p));
+  }
+
   const opponents = Array.from(opponentMap.values()).sort((a, b) =>
     (a.display_name ?? "").localeCompare(b.display_name ?? "")
   );
