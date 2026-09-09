@@ -111,8 +111,9 @@ export function ProGamePicker({ onPick }: Props) {
     <div className="rounded-2xl border border-accent/30 bg-accent/5 p-3">
       <p className={labelCls}>Today&apos;s pro games</p>
       <p className="mt-1 text-xs text-muted">
-        Pick a game and a line. After kickoff (~3 hours for football), we poll
-        ESPN every 15 minutes and settle as soon as it&apos;s final.
+        Pick a game and a line. We grade from ESPN once a day after the game
+        window (about 3 hours past kickoff for football) and settle
+        automatically.
       </p>
 
       <div className="mt-3 flex flex-wrap gap-1.5">
